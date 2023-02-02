@@ -119,9 +119,9 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.on_target_threshold = 0.1
         self.target_bound = 2
         self.target_change_period = 50
-        self.rew_on_target = 2
+        self.rew_on_target = 1
 
-        self.action_space = spaces.Discrete(2)
+        self.action_space = None
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
         self.render_mode = render_mode
@@ -137,6 +137,9 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         self.steps_beyond_terminated = None
 
+    def get_force(self, action):
+        raise NotImplementedError("This method has to be overwritten by subclass")
+
     def step(self, action):
         self.step_count += 1
         self.action = action
@@ -144,7 +147,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         assert self.action_space.contains(action), err_msg
         assert self.state is not None, "Call reset before using step method."
         x, x_dot, theta, theta_dot, target_pos = self.state
-        force = self.force_mag if action == 1 else -self.force_mag
+        force = self.get_force(action)
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
 
@@ -197,8 +200,15 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 )
             self.steps_beyond_terminated += 1
             reward = 0.0
-        if abs(target_pos - x) < self.on_target_threshold:
-            reward += self.rew_on_target
+        # Variante 1: binary reward, on target or not
+        # if abs(target_pos - x) < self.on_target_threshold:
+        #     reward += self.rew_on_target
+        # Variante 2: reward based on distance to target -> may agent doesnt know target is good?
+        dist = abs(target_pos - x)
+        # normalize to interval [0-1]
+        max_x = 4.8
+        dist = dist / (max_x + self.target_bound)
+        reward += 1-dist
 
         if self.render_mode == "human":
             self.render()
@@ -376,3 +386,21 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
+            
+class CartPoleTransitionDiscreteEnv(CartPoleTransitionEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Discrete(2)
+    
+    def get_force(self, action):
+        force = self.force_mag if action == 1 else -self.force_mag
+        return force
+    
+class CartPoleTransitionContinousEnv(CartPoleTransitionEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Box(-10, 10, (1,), float)
+    
+    def get_force(self, action):
+        return action
+    
