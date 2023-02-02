@@ -13,6 +13,8 @@ from gymnasium import logger, spaces
 from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
 
+import util as u
+
 
 class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     """
@@ -114,7 +116,10 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             dtype=np.float32,
         )
 
-        self.on_target_threshold = 0.5
+        self.on_target_threshold = 0.1
+        self.target_bound = 2
+        self.target_change_period = 50
+        self.rew_on_target = 2
 
         self.action_space = spaces.Discrete(2)
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
@@ -128,10 +133,12 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.isopen = True
         self.state = None
         self.action = None
+        self.step_count = 0
 
         self.steps_beyond_terminated = None
 
     def step(self, action):
+        self.step_count += 1
         self.action = action
         err_msg = f"{action!r} ({type(action)}) invalid"
         assert self.action_space.contains(action), err_msg
@@ -162,6 +169,9 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             theta_dot = theta_dot + self.tau * thetaacc
             theta = theta + self.tau * theta_dot
 
+        if self.step_count % self.target_change_period == self.target_change_period -1:
+            target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
+
         self.state = (x, x_dot, theta, theta_dot, target_pos)
 
         terminated = bool(
@@ -188,7 +198,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             self.steps_beyond_terminated += 1
             reward = 0.0
         if abs(target_pos - x) < self.on_target_threshold:
-            reward += 1.0
+            reward += self.rew_on_target
 
         if self.render_mode == "human":
             self.render()
@@ -212,7 +222,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if target_pos is not None: # explicitly given
             self.state[4] = target_pos
         else:
-            self.state[4] = self.np_random.uniform(low=-3, high=3) # random for training
+            self.state[4] = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
 
         if self.render_mode == "human":
             self.render()
@@ -335,8 +345,19 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 10,
                 (255, 0, 0)
             )
-
+        # flip coordinates
         self.surf = pygame.transform.flip(self.surf, False, True)
+        
+        # show state on screen
+        p = precision = 3
+        u.text_to_screen(self.surf, f"pos {np.round(x[0], p)}", (int(self.screen_width/2), 10))
+        u.text_to_screen(self.surf, f"vel {np.round(x[1], p)}", (int(self.screen_width/2), 30))
+        u.text_to_screen(self.surf, f"ang {np.round(x[2], p)}", (int(self.screen_width/2), 50))
+        u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width/2), 70))
+        u.text_to_screen(self.surf, f"tar {np.round(x[4], p)}", (int(self.screen_width/2), 90))
+
+        u.text_to_screen(self.surf, f"Step {self.step_count}", (30,10))
+        
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
             pygame.event.pump()
