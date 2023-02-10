@@ -94,6 +94,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.masspole = 0.1
         self.total_mass = self.masspole + self.masscart
         self.length = 0.5  # actually half the pole's length
+        #! pole has length 2*l
         self.polemass_length = self.masspole * self.length
         self.force_mag = 10.0
         self.tau = 0.02  # seconds between state updates
@@ -117,7 +118,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )
 
         self.on_target_threshold = 0.1
-        self.target_bound = 2
+        self.target_bound = 2  # possible interval for target [-bound, bound]
         self.target_change_period = 50
         self.rew_on_target = 1
 
@@ -133,19 +134,14 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.isopen = True
         self.state = None
         self.action = None
-        self.step_count = 0
+        self.ep_step_count = 0
 
         self.steps_beyond_terminated = None
 
     def get_force(self, action):
         raise NotImplementedError("This method has to be overwritten by subclass")
 
-    def step(self, action):
-        self.step_count += 1
-        self.action = action
-        err_msg = f"{action!r} ({type(action)}) invalid"
-        assert self.action_space.contains(action), err_msg
-        assert self.state is not None, "Call reset before using step method."
+    def calc_new_state(self, action):
         x, x_dot, theta, theta_dot, target_pos = self.state
         force = self.get_force(action)
         costheta = math.cos(theta)
@@ -172,10 +168,20 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             theta_dot = theta_dot + self.tau * thetaacc
             theta = theta + self.tau * theta_dot
 
-        if self.step_count % self.target_change_period == self.target_change_period -1:
+        if self.ep_step_count % self.target_change_period == self.target_change_period -1:
             target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
 
-        self.state = (x, x_dot, theta, theta_dot, target_pos)
+        state = (x, x_dot, theta, theta_dot, target_pos)
+        return state
+
+    def step(self, action):
+        self.ep_step_count += 1
+        self.action = action
+        err_msg = f"{action!r} ({type(action)}) invalid"
+        assert self.action_space.contains(action), err_msg
+        assert self.state is not None, "Call reset before using step method."
+        
+        self.state = x, x_dot, theta, theta_dot, target_pos = self.calc_new_state(action)
 
         terminated = bool(
             x < -self.x_threshold
@@ -203,7 +209,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # Variante 1: binary reward, on target or not
         # if abs(target_pos - x) < self.on_target_threshold:
         #     reward += self.rew_on_target
-        # Variante 2: reward based on distance to target -> may agent doesnt know target is good?
+        # Variante 2: reward based on distance to target -> maybe agent doesnt know target is good?
         dist = abs(target_pos - x)
         # normalize to interval [0-1]
         max_x = 4.8
@@ -233,6 +239,8 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             self.state[4] = target_pos
         else:
             self.state[4] = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
+
+        self.ep_step_count = 0
 
         if self.render_mode == "human":
             self.render()
@@ -366,7 +374,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width/2), 70))
         u.text_to_screen(self.surf, f"tar {np.round(x[4], p)}", (int(self.screen_width/2), 90))
 
-        u.text_to_screen(self.surf, f"Step {self.step_count}", (30,10))
+        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40,10))
         
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
@@ -403,4 +411,47 @@ class CartPoleTransitionContinousEnv(CartPoleTransitionEnv):
     
     def get_force(self, action):
         return action
+
+class CartPoleTransitionContinous2Env(CartPoleTransitionEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Box(-10, 10, (1,), float)
     
+    def get_force(self, action):
+        return action
+
+    def calc_new_state(self, action):
+        x, x_dot, theta, theta_dot, target_pos = self.state
+        force = self.get_force(action)
+        costheta = math.cos(theta)
+        sintheta = math.sin(theta)
+        
+        g = self.gravity
+        s2 = self.length
+        m1 = self.masscart
+        m2 = self.masspole
+
+        # For the interested reader:
+        # https://github.com/cknoll/beispiele/blob/master/wagen_pendel_zus.ipynb
+        thetaacc = (g*(m1 + m2)*sintheta + (-m2*theta_dot**2*s2*sintheta + force)*costheta)/\
+            (s2*(m1 + m2*sintheta**2))
+        
+        xacc = (g*m2*sintheta*costheta - m2*theta_dot**2*s2*sintheta + force)/(m1 + m2*sintheta**2)
+
+        if self.kinematics_integrator == "euler":
+            x = x + self.tau * x_dot
+            x_dot = x_dot + self.tau * xacc
+            theta = theta + self.tau * theta_dot
+            theta_dot = theta_dot + self.tau * thetaacc
+        else:  # semi-implicit euler
+            x_dot = x_dot + self.tau * xacc
+            x = x + self.tau * x_dot
+            theta_dot = theta_dot + self.tau * thetaacc
+            theta = theta + self.tau * theta_dot
+
+        if self.ep_step_count % self.target_change_period == self.target_change_period -1:
+            target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
+
+        state = (x, x_dot, theta, theta_dot, target_pos)
+        return state
+

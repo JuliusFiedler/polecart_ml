@@ -2,7 +2,7 @@ import os
 import numpy as np
 
 from envs.cartpole import CartPoleEnv
-from envs.cartpole_transition import CartPoleTransitionDiscreteEnv, CartPoleTransitionContinousEnv
+from envs.cartpole_transition import CartPoleTransitionDiscreteEnv, CartPoleTransitionContinousEnv, CartPoleTransitionContinous2Env
 from CrossEntropyLearning.cartpoleAgent1_gymnasium import Agent
 from manual.manual import ManualAgent
 from ppo.cartpole_ppo import PPOAgent
@@ -14,14 +14,14 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 
 ### --- Mode --- ###
 # mode = "train"
-# mode = "play"
+mode = "play"
 # mode = "manual"
-mode = "state_feedback"
+# mode = "state_feedback"
 
 ### --- Environment --- ###
 # env = CartPoleEnv()
-# env = CartPoleTransitionDiscreteEnv()
-env = CartPoleTransitionContinousEnv()
+env = CartPoleTransitionDiscreteEnv()
+# env = CartPoleTransitionContinousEnv()
 
 ### --- Agent --- ###
 # agent = Agent(env)
@@ -54,7 +54,8 @@ elif mode == "state_feedback":
     env.render_mode="human"
     state, _ = env.reset()
     while True:
-        u = F @ np.array(state[0:-1])
+        F2 = np.array([[ 654.79653851, -399.5922528,   279.5507985,  -253.5507985 ]])
+        u = - F2 @ np.array(state[0:-1])
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
         print(u)
         # if u > 0:
