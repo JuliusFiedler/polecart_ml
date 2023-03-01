@@ -14,9 +14,9 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 
 ### --- Mode --- ###
 # mode = "train"
-# mode = "play"
+mode = "play"
 # mode = "manual"
-mode = "state_feedback"
+# mode = "state_feedback"
 
 ### --- Environment --- ###
 # env = CartPoleEnv()
@@ -39,7 +39,7 @@ elif mode == "play":
     # env = gym.make("CartPole-v1", render_mode="human")
     env.render_mode="human"
     # agent.model.load_weights(model_path)
-    agent.load_model("ppo_cartpole_model_2023_02_02__15_28_08.h5")
+    agent.load_model("cartpole_model__CartPoleTransitionContinous2Env___2023_03_01__16_55_56.h5")
     agent.play(10)
 elif mode == "manual":
     env.render_mode="human"

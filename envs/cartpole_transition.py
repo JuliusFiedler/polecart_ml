@@ -90,6 +90,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     }
 
     def __init__(self, render_mode: Optional[str] = None):
+        self.set_name()
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
@@ -139,6 +140,9 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         self.steps_beyond_terminated = None
 
+    def set_name(self):
+        self.name = self.__class__.__name__
+
     def get_force(self, action):
         raise NotImplementedError("This method has to be overwritten by subclass")
 
@@ -187,8 +191,8 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         terminated = bool(
             x < -self.x_threshold
             or x > self.x_threshold
-            # or theta < -self.theta_threshold_radians
-            # or theta > self.theta_threshold_radians
+            or theta < -self.theta_threshold_radians
+            or theta > self.theta_threshold_radians
         )
 
         if not terminated:
@@ -236,10 +240,10 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )  # default high
         
         # random state
-        # self.state = self.np_random.uniform(low=low, high=high, size=(5,))
+        self.state = self.np_random.uniform(low=low, high=high, size=(5,))
         # fixed state
-        self.state = np.zeros(5)
-        self.state[2] = -0.05
+        # self.state = np.zeros(5)
+        # self.state[2] = -0.05
         
         self.steps_beyond_terminated = None
         if target_pos is not None: # explicitly given
