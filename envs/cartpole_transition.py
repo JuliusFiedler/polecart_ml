@@ -7,6 +7,7 @@ import math
 from typing import Optional, Union
 
 import numpy as np
+from scipy.integrate import solve_ivp
 
 import gymnasium as gym
 from gymnasium import logger, spaces
@@ -98,7 +99,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.polemass_length = self.masspole * self.length
         self.force_mag = 10.0
         self.tau = 0.02  # seconds between state updates
-        self.kinematics_integrator = "euler"
+        self.kinematics_integrator = "solve_ivp" #"euler"
 
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
@@ -108,11 +109,11 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # is still within bounds.
         high = np.array(
             [
-                self.x_threshold * 2,
-                np.finfo(np.float32).max,
-                self.theta_threshold_radians * 2,
-                np.finfo(np.float32).max,
-                self.x_threshold * 2, # target position
+                self.x_threshold * 2,                   # x
+                np.finfo(np.float32).max,               # xdot
+                self.theta_threshold_radians * 2,       # phi
+                np.finfo(np.float32).max,               # phidot
+                self.x_threshold * 2,                   # target position
             ],
             dtype=np.float32,
         )
@@ -156,7 +157,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             self.length * (4.0 / 3.0 - self.masspole * costheta**2 / self.total_mass)
         )
         xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
-
+        
         if self.kinematics_integrator == "euler":
             x = x + self.tau * x_dot
             x_dot = x_dot + self.tau * xacc
@@ -186,8 +187,8 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         terminated = bool(
             x < -self.x_threshold
             or x > self.x_threshold
-            or theta < -self.theta_threshold_radians
-            or theta > self.theta_threshold_radians
+            # or theta < -self.theta_threshold_radians
+            # or theta > self.theta_threshold_radians
         )
 
         if not terminated:
@@ -233,7 +234,13 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         low, high = utils.maybe_parse_reset_bounds(
             options, -0.05, 0.05  # default low
         )  # default high
-        self.state = self.np_random.uniform(low=low, high=high, size=(5,))
+        
+        # random state
+        # self.state = self.np_random.uniform(low=low, high=high, size=(5,))
+        # fixed state
+        self.state = np.zeros(5)
+        self.state[2] = -0.05
+        
         self.steps_beyond_terminated = None
         if target_pos is not None: # explicitly given
             self.state[4] = target_pos
@@ -423,31 +430,32 @@ class CartPoleTransitionContinous2Env(CartPoleTransitionEnv):
     def calc_new_state(self, action):
         x, x_dot, theta, theta_dot, target_pos = self.state
         force = self.get_force(action)
-        costheta = math.cos(theta)
-        sintheta = math.sin(theta)
-        
-        g = self.gravity
-        s2 = self.length
-        m1 = self.masscart
-        m2 = self.masspole
 
-        # For the interested reader:
-        # https://github.com/cknoll/beispiele/blob/master/wagen_pendel_zus.ipynb
-        thetaacc = (g*(m1 + m2)*sintheta + (-m2*theta_dot**2*s2*sintheta + force)*costheta)/\
-            (s2*(m1 + m2*sintheta**2))
+        # based on mathematical pendulum
         
-        xacc = (g*m2*sintheta*costheta - m2*theta_dot**2*s2*sintheta + force)/(m1 + m2*sintheta**2)
+        def rhs(t, state):
+            x, x_dot, theta, theta_dot = state
+            x1, x2, x3, x4 = x, theta, x_dot, theta_dot # change order
+            g = self.gravity
+            l = self.length
+            m1 = self.masscart
+            m2 = self.masspole
+            u1 = force
+            dx1_dt = x3
+            dx2_dt = x4
+            dx3_dt = (-g*m2*np.sin(2*x2)/2 + l*m2*theta_dot**2*np.sin(x2) + u1)/(m1 + m2*np.sin(x2)**2)
+            dx4_dt = (g*(m1 + m2)*np.sin(x2) - (l*m2*theta_dot**2*np.sin(x2) + u1)*np.cos(x2))/\
+                (l*(m1 + m2*np.sin(x2)**2))
+            
+            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt] # change order back
+        
+        
+        tt = np.linspace(0, self.tau, 2)
+        xx0 = np.array(self.state[:-1]).flatten()
+        s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
 
-        if self.kinematics_integrator == "euler":
-            x = x + self.tau * x_dot
-            x_dot = x_dot + self.tau * xacc
-            theta = theta + self.tau * theta_dot
-            theta_dot = theta_dot + self.tau * thetaacc
-        else:  # semi-implicit euler
-            x_dot = x_dot + self.tau * xacc
-            x = x + self.tau * x_dot
-            theta_dot = theta_dot + self.tau * thetaacc
-            theta = theta + self.tau * theta_dot
+        x, x_dot, theta, theta_dot = s.y[:,-1].flatten()
+        
 
         if self.ep_step_count % self.target_change_period == self.target_change_period -1:
             target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training

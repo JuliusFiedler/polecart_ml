@@ -14,14 +14,14 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 
 ### --- Mode --- ###
 # mode = "train"
-mode = "play"
+# mode = "play"
 # mode = "manual"
-# mode = "state_feedback"
+mode = "state_feedback"
 
 ### --- Environment --- ###
 # env = CartPoleEnv()
-env = CartPoleTransitionDiscreteEnv()
-# env = CartPoleTransitionContinousEnv()
+# env = CartPoleTransitionDiscreteEnv()
+env = CartPoleTransitionContinous2Env()
 
 ### --- Agent --- ###
 # agent = Agent(env)
@@ -46,7 +46,7 @@ elif mode == "manual":
     env.reset()
     a = 0
     while True:
-        state, reward, terminated, truncated, info = env.step(a)
+        state, reward, terminated, truncated, info = env.step(np.array([a]))
         if terminated:
             obs, _ = env.reset()
 
@@ -54,7 +54,7 @@ elif mode == "state_feedback":
     env.render_mode="human"
     state, _ = env.reset()
     while True:
-        F2 = np.array([[ 654.79653851, -399.5922528,   279.5507985,  -253.5507985 ]])
+        F2 = np.array([[-2.4919724770642167, -2.514984709480122, -23.425986238532126, -4.057492354740066]])
         u = - F2 @ np.array(state[0:-1])
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
         print(u)
