@@ -18,13 +18,18 @@ class PPOAgent():
         except KeyboardInterrupt:
             pass
         t = dt.datetime.now().strftime("_%Y_%m_%d__%H_%M_%S")
-        self.model.save(os.path.join("ppo","ppo_cartpole_model"+t+".h5"))
+        name = "cartpole_model__" + self.env.name + "__" + t + ".h5"
+        self.model.save(os.path.join("ppo", name))
         print("Training Done")
+        print(f"Model saved as {name}")
 
     def load_model(self, name):
         path = os.path.join("ppo", name)
         self.model = PPO.load(path)
         
+    def get_action(self, obs):
+        return self.model.predict(obs, deterministic=True)[0]
+    
     def play(self, num_ep=10, render=True):
         self.env.target_change_period = 500
         for i in range(num_ep):

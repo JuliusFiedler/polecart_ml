@@ -7,12 +7,14 @@ import math
 from typing import Optional, Union
 
 import numpy as np
+from scipy.integrate import solve_ivp
 
 import gymnasium as gym
 from gymnasium import logger, spaces
 from gymnasium.envs.classic_control import utils
 from gymnasium.error import DependencyNotInstalled
 
+import util as u
 
 class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     """
@@ -87,15 +89,17 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     }
 
     def __init__(self, render_mode: Optional[str] = None):
+        self.set_name()
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
         self.total_mass = self.masspole + self.masscart
         self.length = 0.5  # actually half the pole's length
+        #! pole has length 2*l
         self.polemass_length = self.masspole * self.length
         self.force_mag = 10.0
         self.tau = 0.02  # seconds between state updates
-        self.kinematics_integrator = "euler"
+        self.kinematics_integrator = "solve_ivp" #"euler"
 
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
@@ -105,15 +109,15 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # is still within bounds.
         high = np.array(
             [
-                self.x_threshold * 2,
-                np.finfo(np.float32).max,
-                self.theta_threshold_radians * 2,
-                np.finfo(np.float32).max,
+                self.x_threshold * 2,                   # x
+                np.finfo(np.float32).max,               # xdot
+                self.theta_threshold_radians * 2,       # phi
+                np.finfo(np.float32).max,               # phidot
             ],
             dtype=np.float32,
         )
 
-        self.action_space = spaces.Discrete(2)
+        self.action_space = None
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
         self.render_mode = render_mode
@@ -125,16 +129,19 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.isopen = True
         self.state = None
         self.action = None
+        self.ep_step_count = 0
 
         self.steps_beyond_terminated = None
 
-    def step(self, action):
-        self.action = action
-        err_msg = f"{action!r} ({type(action)}) invalid"
-        assert self.action_space.contains(action), err_msg
-        assert self.state is not None, "Call reset before using step method."
+    def set_name(self):
+        self.name = self.__class__.__name__
+
+    def get_force(self, action):
+        raise NotImplementedError("This method has to be overwritten by subclass")
+
+    def calc_new_state(self, action):
         x, x_dot, theta, theta_dot = self.state
-        force = self.force_mag if action == 1 else -self.force_mag
+        force = self.get_force(action)
         costheta = math.cos(theta)
         sintheta = math.sin(theta)
 
@@ -147,7 +154,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             self.length * (4.0 / 3.0 - self.masspole * costheta**2 / self.total_mass)
         )
         xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
-
+        
         if self.kinematics_integrator == "euler":
             x = x + self.tau * x_dot
             x_dot = x_dot + self.tau * xacc
@@ -159,7 +166,17 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             theta_dot = theta_dot + self.tau * thetaacc
             theta = theta + self.tau * theta_dot
 
-        self.state = (x, x_dot, theta, theta_dot)
+        state = (x, x_dot, theta, theta_dot)
+        return state
+
+    def step(self, action):
+        self.ep_step_count += 1
+        self.action = action
+        err_msg = f"{action!r} ({type(action)}) invalid"
+        assert self.action_space.contains(action), err_msg
+        assert self.state is not None, "Call reset before using step method."
+        
+        self.state = x, x_dot, theta, theta_dot = self.calc_new_state(action)
 
         terminated = bool(
             x < -self.x_threshold
@@ -184,6 +201,9 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 )
             self.steps_beyond_terminated += 1
             reward = 0.0
+            
+        # add velocity dependant reward to punish oscillations
+        reward -= x**2 
 
         if self.render_mode == "human":
             self.render()
@@ -201,8 +221,22 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         low, high = utils.maybe_parse_reset_bounds(
             options, -0.05, 0.05  # default low
         )  # default high
-        self.state = self.np_random.uniform(low=low, high=high, size=(4,))
+        s = self.observation_space.shape
+        bounds = 0.05
+        low = np.ones(s) * -bounds
+        high = np.ones(s) * bounds
+        
+        low[0] = -1
+        high[0] = 1
+        # random state
+        self.state = self.np_random.uniform(low=low, high=high, size=s)
+        # fixed state
+        # self.state = np.zeros(4)
+        # self.state[0] = -0.5
+
         self.steps_beyond_terminated = None
+
+        self.ep_step_count = 0
 
         if self.render_mode == "human":
             self.render()
@@ -312,8 +346,18 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 10,
                 (255, 0, 0)
             )
-
+        # flip coordinates
         self.surf = pygame.transform.flip(self.surf, False, True)
+        
+        # show state on screen
+        p = precision = 3
+        u.text_to_screen(self.surf, f"pos {np.round(x[0], p)}", (int(self.screen_width/2), 10))
+        u.text_to_screen(self.surf, f"vel {np.round(x[1], p)}", (int(self.screen_width/2), 30))
+        u.text_to_screen(self.surf, f"ang {np.round(x[2], p)}", (int(self.screen_width/2), 50))
+        u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width/2), 70))
+
+        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40,10))
+        
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
             pygame.event.pump()
@@ -332,3 +376,61 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
+            
+class CartPoleDiscreteEnv(CartPoleEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Discrete(2)
+    
+    def get_force(self, action):
+        force = self.force_mag if action == 1 else -self.force_mag
+        return force
+    
+class CartPoleContinousEnv(CartPoleEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Box(-10, 10, (1,), float)
+    
+    def get_force(self, action):
+        return action
+
+class CartPoleContinous2Env(CartPoleEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Box(-10, 10, (1,), float)
+    
+    def get_force(self, action):
+        return action
+
+    def calc_new_state(self, action):
+        x, x_dot, theta, theta_dot = self.state
+        force = self.get_force(action)
+
+        # based on mathematical pendulum
+        
+        def rhs(t, state):
+            x, x_dot, theta, theta_dot = state
+            x1, x2, x3, x4 = x, theta, x_dot, theta_dot # change order
+            g = self.gravity
+            l = self.length
+            m1 = self.masscart
+            m2 = self.masspole
+            u1 = force
+            dx1_dt = x3
+            dx2_dt = x4
+            dx3_dt = (-g*m2*np.sin(2*x2)/2 + l*m2*theta_dot**2*np.sin(x2) + u1)/(m1 + m2*np.sin(x2)**2)
+            dx4_dt = (g*(m1 + m2)*np.sin(x2) - (l*m2*theta_dot**2*np.sin(x2) + u1)*np.cos(x2))/\
+                (l*(m1 + m2*np.sin(x2)**2))
+            
+            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt] # change order back
+        
+        
+        tt = np.linspace(0, self.tau, 2)
+        xx0 = np.array(self.state).flatten()
+        s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
+
+        x, x_dot, theta, theta_dot = s.y[:,-1].flatten()
+
+        state = (x, x_dot, theta, theta_dot)
+        return state
+
