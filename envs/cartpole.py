@@ -8,6 +8,7 @@ from typing import Optional, Union
 
 import numpy as np
 from scipy.integrate import solve_ivp
+from ipydex import IPS
 
 import gymnasium as gym
 from gymnasium import logger, spaces
@@ -130,6 +131,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.state = None
         self.action = None
         self.ep_step_count = 0
+        
+        self.target_offset = 0
 
         self.steps_beyond_terminated = None
 
@@ -207,7 +210,10 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         if self.render_mode == "human":
             self.render()
-        return np.array(self.state, dtype=np.float32), reward, terminated, False, {}
+            
+        state = np.array(self.state, dtype=np.float32)
+        state[0] -= self.target_offset
+        return state, reward, terminated, False, {}
 
     def reset(
         self,
@@ -235,6 +241,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # self.state[0] = -0.5
 
         self.steps_beyond_terminated = None
+        self.target_offset = 0
 
         self.ep_step_count = 0
 
@@ -361,8 +368,32 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
             pygame.event.pump()
+            
+            # some event handling for interactivity
+            push_angle = 10.0 / 180 * np.pi
+            for ev in pygame.event.get():
+                if ev.type == pygame.QUIT:
+                    pygame.quit()
+                if ev.type == pygame.KEYDOWN:
+                    # push rod to make cart do something
+                    if ev.key == pygame.K_LEFT:
+                        state = list(self.state)
+                        state[2] -= push_angle
+                        self.state = state
+                    if ev.key == pygame.K_RIGHT:
+                        state = list(self.state)
+                        state[2] += push_angle
+                        self.state = state
+                if ev.type == pygame.MOUSEBUTTONDOWN:
+                    mouse_pos = pygame.mouse.get_pos()
+                    target_x = - (self.screen_width / 2 - mouse_pos[0]) / scale
+                    self.target_offset = target_x
+                    print(mouse_pos)
+                    print(target_x)
+                        
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
+            
 
         elif self.render_mode == "rgb_array":
             return np.transpose(

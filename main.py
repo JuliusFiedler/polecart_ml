@@ -15,10 +15,10 @@ folder_path = os.path.abspath(os.path.dirname(__file__))
 model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transition_crossentropy.h5")
 
 ### --- Mode --- ###
-mode = "train"
+# mode = "train"
 # mode = "play"
 # mode = "manual"
-# mode = "state_feedback"
+mode = "state_feedback"
 # mode = "compare"
 
 ### --- Environment --- ###
@@ -44,7 +44,7 @@ elif mode == "play":
     # env = gym.make("CartPole-v1", render_mode="human")
     env.render_mode="human"
     # agent.model.load_weights(model_path)
-    agent.load_model("cartpole_model__CartPoleContinous2Env___2023_03_02__15_05_25.h5")
+    agent.load_model("cartpole_model__CartPoleContinous2Env___2023_03_02__16_40_49.h5")
     agent.play(10)
 elif mode == "manual":
     env.render_mode="human"
@@ -64,7 +64,6 @@ elif mode == "state_feedback":
         F = F_LQR_3
         u = - F @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
-        print(u)
         state1, reward, terminated, truncated, info = env.step(action)
         if terminated:
             state1, _ = env.reset()
@@ -74,10 +73,10 @@ elif mode == "compare":
     render = False
     
     ### --- Agents 1 --- ###
-    # agent1 = PPOAgent(env)
-    # agent1.load_model("cartpole_model__CartPoleContinous2Env___2023_03_02__15_05_25.h5")
-    F = F_LQR_2
-    agent1 = FeedbackAgent(env, F)
+    agent1 = PPOAgent(env)
+    agent1.load_model("cartpole_model__CartPoleContinous2Env___2023_03_02__16_40_49.h5")
+    # F = F_LQR_2
+    # agent1 = FeedbackAgent(env, F)
     
     
     ### --- Agents 2 --- ###
@@ -117,9 +116,10 @@ elif mode == "compare":
     fig, ax = plt.subplots(2,1)
     ax[0].plot(np.arange(len(actions1)), actions1, label=f"1 {agent1.__class__.__name__}")
     ax[0].plot(np.arange(len(actions2)), actions2, label=f"2 {agent2.__class__.__name__}", linestyle="dashed")
+    ax[0].legend()
     
     ax[1].plot(np.arange(len(actions1)), np.array(actions1) - np.array(actions2), label="1-2")
-    plt.legend()
+    ax[1].legend()
     plt.show()
     
     
