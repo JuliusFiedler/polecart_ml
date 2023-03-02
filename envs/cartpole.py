@@ -206,7 +206,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             reward = 0.0
             
         # add velocity dependant reward to punish oscillations
-        reward -= x**2 
+        reward -= x**2
 
         if self.render_mode == "human":
             self.render()
@@ -232,8 +232,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         low = np.ones(s) * -bounds
         high = np.ones(s) * bounds
         
-        low[0] = -1
-        high[0] = 1
+        low[0] = -0.5
+        high[0] = 0.5
         # random state
         self.state = self.np_random.uniform(low=low, high=high, size=s)
         # fixed state
@@ -388,8 +388,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                     mouse_pos = pygame.mouse.get_pos()
                     target_x = - (self.screen_width / 2 - mouse_pos[0]) / scale
                     self.target_offset = target_x
-                    print(mouse_pos)
-                    print(target_x)
+                    print("Target", target_x)
                         
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()

@@ -26,6 +26,7 @@ class PPOAgent():
     def load_model(self, name):
         path = os.path.join("ppo", name)
         self.model = PPO.load(path)
+        self.model_name = name
         
     def get_action(self, obs):
         return self.model.predict(obs, deterministic=True)[0]

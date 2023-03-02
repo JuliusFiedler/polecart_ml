@@ -18,8 +18,8 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 # mode = "train"
 # mode = "play"
 # mode = "manual"
-mode = "state_feedback"
-# mode = "compare"
+# mode = "state_feedback"
+mode = "compare"
 
 ### --- Environment --- ###
 # env = CartPoleDiscreteEnv()
@@ -80,7 +80,7 @@ elif mode == "compare":
     
     
     ### --- Agents 2 --- ###
-    F = F_LQR_1
+    F = F_LQR_3
     agent2 = FeedbackAgent(env2, F)
     
     ### ---------------- ###
@@ -91,11 +91,16 @@ elif mode == "compare":
         env2.render_mode = "human"
     actions1 = []
     actions2 = []
+    states1 = []
+    states2 = []
     reset_freq = 500
     
     state1, _ = env.reset(seed=0)
     state2, _ = env2.reset(seed=0)
     for i in range(5000):
+        states1.append(state1)
+        states2.append(state2)
+        
         action1 = agent1.get_action(state1)
         actions1.append(action1)
         
@@ -113,13 +118,38 @@ elif mode == "compare":
             state1, _ = env.reset(seed=i)
             state2, _ = env2.reset(seed=i)
     
-    fig, ax = plt.subplots(2,1)
-    ax[0].plot(np.arange(len(actions1)), actions1, label=f"1 {agent1.__class__.__name__}")
-    ax[0].plot(np.arange(len(actions2)), actions2, label=f"2 {agent2.__class__.__name__}", linestyle="dashed")
-    ax[0].legend()
     
-    ax[1].plot(np.arange(len(actions1)), np.array(actions1) - np.array(actions2), label="1-2")
+    states1 = np.array(states1)
+    states2 = np.array(states2)
+    
+    fig, ax = plt.subplots(2,1)
+    fig.suptitle(f"Comparison \n1 {agent1.__class__.__name__} {agent1.model_name}\n2 {agent2.__class__.__name__} {agent2.model_name}")
+    ax[0].plot(np.arange(len(states1)), states1[:, 0], label=f"{agent1.__class__.__name__} x", color="tab:blue")
+    ax[0].plot(np.arange(len(states2)), states2[:, 0], label=f"{agent2.__class__.__name__} x", color="tab:cyan", linestyle="dashed")
+    ax[0].plot(np.arange(len(states1)), states1[:, 2], label=f"{agent1.__class__.__name__} phi", color="tab:red")
+    ax[0].plot(np.arange(len(states2)), states2[:, 2], label=f"{agent2.__class__.__name__} phi", color="tab:pink", linestyle="dashed")
+    ax[0].set_title("States")
+    ax[0].legend()
+    ax[0].grid()
+    
+    labels = [f"1 {agent1.__class__.__name__}", f"2 {agent2.__class__.__name__}"]
+    ax[1].plot(np.arange(len(actions1)), actions1, label=labels[0])
+    ax[1].plot(np.arange(len(actions2)), actions2, label=labels[1], linestyle="dashed")
+    ax[1].set_title("Actions")
     ax[1].legend()
+    ax[1].grid()
+    
+    fig2, ax2 = plt.subplots(2,1)
+    ax2[0].plot(np.arange(len(states1)), states1[:, 0] - states2[:, 0], label=f"A1-A2 delta x", color="tab:blue")
+    ax2[0].plot(np.arange(len(states1)), states1[:, 2] - states2[:, 2], label=f"A1-A2 delta phi", color="tab:red")
+    ax2[0].set_title("State delta")
+    ax2[0].legend()
+    ax2[0].grid()
+    
+    ax2[1].plot(np.arange(len(actions1)), np.array(actions1) - np.array(actions2), label="A1-A2 actions")
+    ax2[1].set_title("Action delta")
+    ax2[1].legend()
+    ax2[1].grid()
     plt.show()
     
     
