@@ -1,20 +1,23 @@
 import numpy as np
 import torch as th
-from ipydex import IPS
-
+from ipydex import IPS, activate_ips_on_exception
+import sympy as sp
+import symbtools as st
 
 from ppo.cartpole_ppo import PPOAgent
-from envs.cartpole_transition import CartPoleTransitionContinous2Env
+from envs.cartpole import CartPoleContinous2Env
 
-env = CartPoleTransitionContinous2Env()
+activate_ips_on_exception()
+
+env = CartPoleContinous2Env()
 
 agent = PPOAgent(env)
 
-agent.load_model("cartpole_model__CartPoleTransitionContinous2Env___2023_03_01__16_55_56.h5")
+agent.load_model("cartpole_model__CartPoleContinous2Env___2023_03_02__16_40_49.h5")
 model = agent.model
 
-input_features = 5
-output_features = 1
+# input_features = 4
+# output_features = 1
 
 policy_net_weights = []
 policy_net_biases = []
@@ -35,6 +38,7 @@ if isinstance(model.policy.mlp_extractor.policy_net, th.nn.modules.container.Seq
             raise NotImplementedError
 else:
     raise NotImplementedError
+
 # extract action net information
 if isinstance(model.policy.action_net, th.nn.modules.container.Sequential):
     for item in model.policy.action_net:
@@ -51,25 +55,7 @@ elif isinstance(model.policy.action_net, th.nn.modules.linear.Linear):
 else:
     raise NotImplementedError
 
-# for i in range(len(policy_net_architecture)):
-#     policy_net_weights.append(np.array(model.policy.state_dict()[f"mlp_extractor.policy_net.{2*i}.weight"]))
-#     policy_net_biases.append(np.array(model.policy.state_dict()[f"mlp_extractor.policy_net.{2*i}.bias"]))
-
-# if len(action_net_architecture) == 1:
-#     action_net_weights.append(np.array(model.policy.state_dict()[f"action_net.weight"]))
-#     action_net_biases.append(np.array(model.policy.state_dict()[f"action_net.bias"]))
-# else:
-#     raise NotImplementedError
-#     for i in range(len(action_net_architecture)):
-#         action_net_weights.append(np.array(model.policy.state_dict()[f"action_net.{2*i}.weight"]))
-#         action_net_biases.append(np.array(model.policy.state_dict()[f"action_net.{2*i}.bias"]))
-
-# activation_fn_class = model.policy.activation_fn
-
-# if activation_fn_class.__name__ == "Tanh":
-#     act_fn = np.tanh
-# else:
-#     raise NotImplementedError
+# TODO: maybe this should have the form of a dict?
 
 def policy_net(layer):
     for i in range(len(policy_net_weights)):
@@ -82,6 +68,7 @@ def action_net(layer):
         layer = action_net_weights[i] @ layer + action_net_biases[i]
         if i < len(action_net_activation_fns):
             layer = action_net_activation_fns[i](layer)
+        # TODO: this is not generalizable
     return layer
 
 def NN(obs):
@@ -92,11 +79,86 @@ def NN(obs):
     
     return layer
 
-obs = [1,1,1,1,1.0]
+obs = [0.01,0.01,0.01,0.01]
 obs_t = model.policy.obs_to_tensor(obs)[0]
 features = model.policy.extract_features(obs_t)
 NN(obs)
 model.predict(obs, deterministic=True)
+# this doesnt work if model clips action and NN does not, use sensible obs
 assert sum(NN(obs) - model.predict(obs, deterministic=True)[0]) < 1e-4
+
+
+
+# linearization of NN
+
+## scalar method
+Bpi = [sp.var(f"Bp{i}") for i in range(len(policy_net_biases))]
+Wpi = [sp.var(f"Wp{i}") for i in range(len(policy_net_weights))]
+Bai = [sp.var(f"Ba{i}") for i in range(len(action_net_biases))]
+Wai = [sp.var(f"Wa{i}") for i in range(len(action_net_weights))]
+x = sp.var("x")
+
+# f = Bai[0] + Wai[0] * sp.tanh(Bpi[1] + Wpi[1] * sp.tanh(Bpi[0] + Wpi[0] * x))
+f = Bai[0] + Wai[0] * sp.tanh(Bpi[0] + Wpi[0] * x)
+J = sp.diff(f, x)
+J0 = J.subs(x, 0)
+# ! unclear if and how dimensions would work
+IPS()
+
+## Matrix method
+#! does not work, computation doesnt finish
+#! problem: tanh of matrix
+# TODO struktur von f prüfen (Matrix(Matrix))
+Bpi = [sp.MatrixSymbol(f"Bp{i}", M.shape[0], 1) for i, M in enumerate(policy_net_biases)]
+Wpi = [sp.MatrixSymbol(f"Wp{i}", *M.shape) for i, M in enumerate(policy_net_weights)]
+Bai = [sp.MatrixSymbol(f"Ba{i}", M.shape[0], 1) for i, M in enumerate(action_net_biases)]
+Wai = [sp.MatrixSymbol(f"Wa{i}", *M.shape) for i, M in enumerate(action_net_weights)]
+
+assert all([np.tanh == i for i in policy_net_activation_fns]), "Not Implemented"
+policy_net_activation_fns_sp = [sp.tanh for i in policy_net_activation_fns]
+
+
+x = sp.Matrix([sp.var(f"x{i}") for i in range(env.observation_space.shape[0])])
+f = x
+
+def elementwise_matrix_function(M: sp.MutableDenseMatrix, f) -> sp.MutableDenseMatrix:
+    shape = M.shape
+    if len(shape) == 1:
+        n = shape[0]
+        m = 1
+    elif len(shape) == 2:
+        n, m = shape
+    else:
+        raise NotImplementedError
+    
+    M_ = sp.zeros(*shape)
+    for i in range(n):
+        for j in range(m):
+            M_[i, j] = f(M[i,j])
+    return M_
+emf = elementwise_matrix_function
+
+for i in range(len(Wpi)):
+    # f = sp.Matrix([policy_net_activation_fns_sp[i](row) for row in (Wpi[i] @ f + Bpi[i])[:,0]])
+    f = emf(Wpi[i] @ f + Bpi[i], sp.tanh)
+for i in range(len(Wai)):
+    f = Wai[i] @ f + Bai[i]
+
+IPS()
+J = st.jac(f, x)
+
+J0 = J.subs([*zip(x, sp.zeros(len(x)))])
+
+subslist = []
+subslist.extend([(Bpi[i], sp.Matrix(policy_net_biases[i])) for i in range(len(Bpi))])
+subslist.extend([(Wpi[i], sp.Matrix(policy_net_weights[i])) for i in range(len(Wpi))])
+subslist.extend([(Bai[i], sp.Matrix(action_net_biases[i])) for i in range(len(Bai))])
+subslist.extend([(Wai[i], sp.Matrix(action_net_weights[i])) for i in range(len(Wai))])
+
+#! substitution of Matrices only works with sp.Matrix, not with np array
+K = J0.subs(subslist)
+
+#! evaluation of subbed matrix can be done by calling .doit()
+IPS()
 
 print("done")
