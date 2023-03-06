@@ -1,11 +1,33 @@
 import pygame as pg
 import numpy as np
+import os
+from colorama import Style, Fore
+
+ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 
 white = (255, 255, 255)
 black = (0, 0, 0)
 green = (0, 255, 0)
 blue = (0, 0, 255)
 red = (255, 0, 0)
+red = (200, 0, 0)
+light_red = (255, 0, 0)
+
+
+def bright(txt):
+    return f"{Style.BRIGHT}{txt}{Style.RESET_ALL}"
+
+
+def bgreen(txt):
+    return f"{Fore.GREEN}{Style.BRIGHT}{txt}{Style.RESET_ALL}"
+
+
+def bred(txt):
+    return f"{Fore.RED}{Style.BRIGHT}{txt}{Style.RESET_ALL}"
+
+
+def yellow(txt):
+    return f"{Fore.YELLOW}{txt}{Style.RESET_ALL}"
 
 
 def text_to_screen(surf, text, pos, font=None, fontsize=16, color=None):
@@ -17,5 +39,67 @@ def text_to_screen(surf, text, pos, font=None, fontsize=16, color=None):
     obj_rect = obj.get_rect()
     obj_rect.center = (int(pos[0]), int(pos[1]))
     surf.blit(obj, obj_rect)
-    
-    
+
+
+def text_objects(msg, font, text_color=black):
+    text_surface = font.render(msg, True, text_color)
+    return text_surface, text_surface.get_rect()
+
+
+class Button:
+    def __init__(
+        self,
+        disp,
+        x,
+        y,
+        w,
+        h,
+        inactive_color,
+        active_color,
+        text,
+        font=None,
+        text_color=black,
+        action=None,
+        action_args=[],
+    ) -> None:
+        self.disp = disp
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.inactive_color = inactive_color
+        self.active_color = active_color
+        self.text = text
+        self.font = pg.font.Font("freesansbold.ttf", 16)
+        self.text_color = text_color
+        self.action = action
+        self.already_pressed = False
+        self.action_args = action_args
+
+    def show(self):
+        mouse = pg.mouse.get_pos()
+        click = pg.mouse.get_pressed()
+        button_pressed = False
+        button_pos = (self.x, self.y)
+        button_size = button_2_size = (self.w, self.h)
+        if (
+            mouse[0] > button_pos[0]
+            and mouse[0] < button_pos[0] + button_size[0]
+            and mouse[1] > button_pos[1]
+            and mouse[1] < button_pos[1] + button_size[1]
+        ):
+            pg.draw.rect(self.disp, self.active_color, button_pos + button_size)
+            if click[0] and self.action != None:
+                # Button entprellen
+                if not self.already_pressed:
+                    self.action(*self.action_args)
+                    self.already_pressed = True
+            else:
+                self.already_pressed = False
+
+        else:
+            pg.draw.rect(self.disp, self.inactive_color, button_pos + button_size)
+
+        text_surface, text_rect = text_objects(self.text, self.font, self.text_color)
+        text_rect.center = (button_pos[0] + button_size[0] / 2, button_pos[1] + button_size[1] / 2)
+        self.disp.blit(text_surface, text_rect)

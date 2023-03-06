@@ -17,6 +17,7 @@ from gymnasium.error import DependencyNotInstalled
 
 import util as u
 
+
 class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     """
     ## Description
@@ -90,7 +91,14 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     }
 
     def __init__(self, render_mode: Optional[str] = None):
+        # meta info
         self.set_name()
+        self.seed = None
+        self.episode_count = 0
+        self.ep_step_count = 0
+        self.total_step_count = 0
+
+        # physics
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
@@ -100,20 +108,21 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.polemass_length = self.masspole * self.length
         self.force_mag = 10.0
         self.tau = 0.02  # seconds between state updates
-        self.kinematics_integrator = "solve_ivp" #"euler"
+        self.kinematics_integrator = "solve_ivp"  # "euler"
 
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
         self.x_threshold = 2.4
 
+        # environment
         # Angle limit set to 2 * theta_threshold_radians so failing observation
         # is still within bounds.
         high = np.array(
             [
-                self.x_threshold * 2,                   # x
-                np.finfo(np.float32).max,               # xdot
-                self.theta_threshold_radians * 2,       # phi
-                np.finfo(np.float32).max,               # phidot
+                self.x_threshold * 2,  # x
+                np.finfo(np.float32).max,  # xdot
+                self.theta_threshold_radians * 2,  # phi
+                np.finfo(np.float32).max,  # phidot
             ],
             dtype=np.float32,
         )
@@ -130,9 +139,10 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.isopen = True
         self.state = None
         self.action = None
-        self.ep_step_count = 0
-        
+
+        # UI variables
         self.target_offset = 0
+        self.request_reset = False
 
         self.steps_beyond_terminated = None
 
@@ -150,14 +160,12 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         # For the interested reader:
         # https://coneural.org/florian/papers/05_cart_pole.pdf
-        temp = (
-            force + self.polemass_length * theta_dot**2 * sintheta
-        ) / self.total_mass
+        temp = (force + self.polemass_length * theta_dot**2 * sintheta) / self.total_mass
         thetaacc = (self.gravity * sintheta - costheta * temp) / (
             self.length * (4.0 / 3.0 - self.masspole * costheta**2 / self.total_mass)
         )
         xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
-        
+
         if self.kinematics_integrator == "euler":
             x = x + self.tau * x_dot
             x_dot = x_dot + self.tau * xacc
@@ -174,13 +182,32 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
     def step(self, action):
         self.ep_step_count += 1
+        self.total_step_count += 1
         self.action = action
         err_msg = f"{action!r} ({type(action)}) invalid"
         assert self.action_space.contains(action), err_msg
         assert self.state is not None, "Call reset before using step method."
-        
-        self.state = x, x_dot, theta, theta_dot = self.calc_new_state(action)
 
+        self.state = self.calc_new_state(action)
+
+        reward, terminated, truncated, info = self.get_reward()
+
+        if self.render_mode == "human":
+            self.render()
+
+        # manipulate state to make interactive env with mobile target position
+        state = np.array(self.state, dtype=np.float32)
+        state[0] -= self.target_offset
+        if self.request_reset:
+            truncated = True
+
+        return state, reward, terminated, truncated, info
+
+    def get_reward(self):
+        x, x_dot, theta, theta_dot = self.state
+
+        truncated = False
+        info = {}
         terminated = bool(
             x < -self.x_threshold
             or x > self.x_threshold
@@ -204,16 +231,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 )
             self.steps_beyond_terminated += 1
             reward = 0.0
-            
-        # add velocity dependant reward to punish oscillations
-        reward -= x**2
 
-        if self.render_mode == "human":
-            self.render()
-            
-        state = np.array(self.state, dtype=np.float32)
-        state[0] -= self.target_offset
-        return state, reward, terminated, False, {}
+        return reward, terminated, truncated, info
 
     def reset(
         self,
@@ -221,17 +240,17 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         seed: Optional[int] = None,
         options: Optional[dict] = None,
     ):
+        if seed is None and self.seed is not None:
+            seed = self.seed + self.episode_count
         super().reset(seed=seed)
         # Note that if you use custom reset bounds, it may lead to out-of-bound
         # state/observations.
-        low, high = utils.maybe_parse_reset_bounds(
-            options, -0.05, 0.05  # default low
-        )  # default high
+        low, high = utils.maybe_parse_reset_bounds(options, -0.05, 0.05)  # default low  # default high
         s = self.observation_space.shape
         bounds = 0.05
         low = np.ones(s) * -bounds
         high = np.ones(s) * bounds
-        
+
         low[0] = -0.5
         high[0] = 0.5
         # random state
@@ -242,8 +261,10 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         self.steps_beyond_terminated = None
         self.target_offset = 0
+        self.request_reset = False
 
         self.ep_step_count = 0
+        self.episode_count += 1
 
         if self.render_mode == "human":
             self.render()
@@ -263,17 +284,13 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             import pygame
             from pygame import gfxdraw
         except ImportError as e:
-            raise DependencyNotInstalled(
-                "pygame is not installed, run `pip install gymnasium[classic-control]`"
-            ) from e
+            raise DependencyNotInstalled("pygame is not installed, run `pip install gymnasium[classic-control]`") from e
 
         if self.screen is None:
             pygame.init()
             if self.render_mode == "human":
                 pygame.display.init()
-                self.screen = pygame.display.set_mode(
-                    (self.screen_width, self.screen_height)
-                )
+                self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
             else:  # mode == "rgb_array"
                 self.screen = pygame.Surface((self.screen_width, self.screen_height))
         if self.clock is None:
@@ -336,39 +353,43 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         gfxdraw.hline(self.surf, 0, self.screen_width, carty, (0, 0, 0))
 
         # show action
-        if self.action == 0:
-            gfxdraw.filled_circle(
-                self.surf,
-                int(self.screen_width/2 - 10),
-                10,
-                10,
-                (0, 0, 255)
-
-            )
-        elif self.action == 1:
-            gfxdraw.filled_circle(
-                self.surf,
-                int(self.screen_width/2 + 10),
-                10,
-                10,
-                (255, 0, 0)
-            )
+        # if self.action == 0:
+        #     gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 - 10), 10, 10, (0, 0, 255))
+        # elif self.action == 1:
+        #     gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 + 10), 10, 10, (255, 0, 0))
+        
         # flip coordinates
         self.surf = pygame.transform.flip(self.surf, False, True)
-        
+
         # show state on screen
         p = precision = 3
-        u.text_to_screen(self.surf, f"pos {np.round(x[0], p)}", (int(self.screen_width/2), 10))
-        u.text_to_screen(self.surf, f"vel {np.round(x[1], p)}", (int(self.screen_width/2), 30))
-        u.text_to_screen(self.surf, f"ang {np.round(x[2], p)}", (int(self.screen_width/2), 50))
-        u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width/2), 70))
+        u.text_to_screen(self.surf, f"pos {np.round(x[0], p)}", (int(self.screen_width / 2), 10))
+        u.text_to_screen(self.surf, f"vel {np.round(x[1], p)}", (int(self.screen_width / 2), 30))
+        u.text_to_screen(self.surf, f"ang {np.round(x[2], p)}", (int(self.screen_width / 2), 50))
+        u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width / 2), 70))
 
-        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40,10))
-        
+        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40, 10))
+
+        # reset button
+        # u.text_to_screen(self.surf, f"Reset", (self.screen_width - 50, 10))
+        def req_res():
+            self.request_reset = True
+        u.Button(
+            self.surf,
+            self.screen_width - 60,
+            5,
+            50,
+            20,
+            u.red,
+            u.light_red,
+            "Reset",
+            action=req_res
+        ).show()
+
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
             pygame.event.pump()
-            
+
             # some event handling for interactivity
             push_angle = 10.0 / 180 * np.pi
             for ev in pygame.event.get():
@@ -386,18 +407,17 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                         self.state = state
                 if ev.type == pygame.MOUSEBUTTONDOWN:
                     mouse_pos = pygame.mouse.get_pos()
-                    target_x = - (self.screen_width / 2 - mouse_pos[0]) / scale
-                    self.target_offset = target_x
-                    print("Target", target_x)
-                        
+                    print(mouse_pos)
+                    if mouse_pos[1] > 300:
+                        target_x = -(self.screen_width / 2 - mouse_pos[0]) / scale
+                        self.target_offset = target_x
+                        print("Target", target_x)
+
             self.clock.tick(self.metadata["render_fps"])
             pygame.display.flip()
-            
 
         elif self.render_mode == "rgb_array":
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
-            )
+            return np.transpose(np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2))
 
     def close(self):
         if self.screen is not None:
@@ -406,29 +426,36 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
-            
+
+
 class CartPoleDiscreteEnv(CartPoleEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
         self.action_space = spaces.Discrete(2)
-    
+
     def get_force(self, action):
         force = self.force_mag if action == 1 else -self.force_mag
         return force
-    
+
+
 class CartPoleContinousEnv(CartPoleEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
         self.action_space = spaces.Box(-10, 10, (1,), float)
-    
+
     def get_force(self, action):
         return action
+
 
 class CartPoleContinous2Env(CartPoleEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
         self.action_space = spaces.Box(-10, 10, (1,), float)
-    
+        import envs.parameter.CartPoleContinous2Env as c
+
+        self.c = c
+        self.seed = c.START_SEED
+
     def get_force(self, action):
         return action
 
@@ -437,10 +464,10 @@ class CartPoleContinous2Env(CartPoleEnv):
         force = self.get_force(action)
 
         # based on mathematical pendulum
-        
+
         def rhs(t, state):
             x, x_dot, theta, theta_dot = state
-            x1, x2, x3, x4 = x, theta, x_dot, theta_dot # change order
+            x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
             g = self.gravity
             l = self.length
             m1 = self.masscart
@@ -448,19 +475,54 @@ class CartPoleContinous2Env(CartPoleEnv):
             u1 = force
             dx1_dt = x3
             dx2_dt = x4
-            dx3_dt = (-g*m2*np.sin(2*x2)/2 + l*m2*theta_dot**2*np.sin(x2) + u1)/(m1 + m2*np.sin(x2)**2)
-            dx4_dt = (g*(m1 + m2)*np.sin(x2) - (l*m2*theta_dot**2*np.sin(x2) + u1)*np.cos(x2))/\
-                (l*(m1 + m2*np.sin(x2)**2))
-            
-            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt] # change order back
-        
-        
+            dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
+                m1 + m2 * np.sin(x2) ** 2
+            )
+            dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
+                l * (m1 + m2 * np.sin(x2) ** 2)
+            )
+
+            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
+
         tt = np.linspace(0, self.tau, 2)
         xx0 = np.array(self.state).flatten()
         s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
 
-        x, x_dot, theta, theta_dot = s.y[:,-1].flatten()
+        x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
 
         state = (x, x_dot, theta, theta_dot)
         return state
 
+    def get_reward(self):
+        x, x_dot, theta, theta_dot = self.state
+
+        truncated = False
+        info = {}
+        terminated = bool(
+            x < -self.x_threshold
+            or x > self.x_threshold
+            or theta < -self.theta_threshold_radians
+            or theta > self.theta_threshold_radians
+        )
+
+        if not terminated:
+            reward = self.c.REW_STEP
+        elif self.steps_beyond_terminated is None:
+            # Pole just fell!
+            self.steps_beyond_terminated = 0
+            reward = self.c.REW_STEP
+        else:
+            if self.steps_beyond_terminated == 0:
+                logger.warn(
+                    "You are calling 'step()' even though this "
+                    "environment has already returned terminated = True. You "
+                    "should always call 'reset()' once you receive 'terminated = "
+                    "True' -- any further steps are undefined behavior."
+                )
+            self.steps_beyond_terminated += 1
+            reward = 0.0
+
+        # add punishment for leaving x=0
+        reward += x**2 * self.c.REW_FACTOR_DELTA_X_SQARED
+
+        return reward, terminated, truncated, info

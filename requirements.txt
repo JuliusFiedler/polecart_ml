@@ -1,0 +1,12 @@
+numpy
+sympy
+matplotlib
+symbtools
+torch
+gymnasium
+gymnasium[classic-control]
+stable_baselines3
+ipydex
+datetime
+colorama
+pygame
