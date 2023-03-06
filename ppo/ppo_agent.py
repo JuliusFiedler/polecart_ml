@@ -12,7 +12,7 @@ from util import *
 class PPOAgent:
     def __init__(self, env) -> None:
         self.env = env
-        self.model = PPO("MlpPolicy", self.env, verbose=1)
+        self.model = PPO("MlpPolicy", self.env, verbose=1, seed=env.c.START_SEED)
 
     def train(self, total_timesteps=300000):
         try:

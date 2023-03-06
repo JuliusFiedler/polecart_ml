@@ -189,6 +189,10 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         assert self.state is not None, "Call reset before using step method."
 
         self.state = self.calc_new_state(action)
+        
+        # Debug reproducibility  
+        # with open("test.txt", "a") as f:
+        #     f.write(f"\nStep. {self.total_step_count}, Action: {action}, new State: {self.state}")
 
         reward, terminated, truncated, info = self.get_reward()
 
