@@ -97,6 +97,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.episode_count = 0
         self.ep_step_count = 0
         self.total_step_count = 0
+        self.training = False
 
         # physics
         self.gravity = 9.8

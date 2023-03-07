@@ -13,6 +13,7 @@ from CrossEntropyLearning.cartpoleAgent1_gymnasium import Agent
 from manual.manual import ManualAgent
 from ppo.ppo_agent import PPOAgent
 from classical.feedback_agent import *
+import util
 
 np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
@@ -20,10 +21,10 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 
 ### --- Mode --- ###
 # mode = "train"
-mode = "retrain"
+# mode = "retrain"
 # mode = "play"
 # mode = "manual"
-# mode = "state_feedback"
+mode = "state_feedback"
 # mode = "compare"
 
 ### --- Environment --- ###
@@ -54,7 +55,7 @@ elif mode == "play":
     # env = gym.make("CartPole-v1", render_mode="human")
     env.render_mode = "human"
     # agent.model.load_weights(model_path)
-    agent.load_model("CartPoleContinousSwingupEnv___2023_03_07__14_54_48")
+    agent.load_model("CartPoleContinousSwingupEnv___2023_03_07__16_24_24")
     agent.play(10)
 elif mode == "manual":
     env.render_mode = "human"
@@ -71,8 +72,9 @@ elif mode == "state_feedback":
     env.render_mode = "human"
     state1, _ = env.reset()
     while True:
-        F = F_LQR_3["F"]
-        u = -F @ np.array(state1)
+        F = F_EV_real_LOWER_EQ_1
+        state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
+        u = -F["F"] @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
         state1, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:

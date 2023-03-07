@@ -16,6 +16,7 @@ class PPOAgent:
         self.model = PPO("MlpPolicy", self.env, verbose=1, seed=self.seed)
 
     def train(self, total_timesteps=300000, save_model=True):
+        self.env.training = True
         try:
             self.model.learn(total_timesteps=total_timesteps)
         except KeyboardInterrupt:
@@ -23,6 +24,7 @@ class PPOAgent:
         print("Training Done")
         if save_model:
             self.save_model()
+        self.env.training = False
 
     def save_model(self):
         # save model
