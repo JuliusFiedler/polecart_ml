@@ -188,11 +188,13 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         assert self.action_space.contains(action), err_msg
         assert self.state is not None, "Call reset before using step method."
 
+        old_state = self.state
+
         self.state = self.calc_new_state(action)
         
         # Debug reproducibility  
         # with open("test.txt", "a") as f:
-        #     f.write(f"\nStep. {self.total_step_count}, Action: {action}, new State: {self.state}")
+        #     f.write(f"\nStep. {self.total_step_count}, old State: {old_state}, Action: {action}, new State: {self.state}")
 
         reward, terminated, truncated, info = self.get_reward()
 
@@ -249,16 +251,18 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         super().reset(seed=seed)
         # Note that if you use custom reset bounds, it may lead to out-of-bound
         # state/observations.
-        low, high = utils.maybe_parse_reset_bounds(options, -0.05, 0.05)  # default low  # default high
-        s = self.observation_space.shape
-        bounds = 0.05
-        low = np.ones(s) * -bounds
-        high = np.ones(s) * bounds
+        # low, high = utils.maybe_parse_reset_bounds(options, -0.05, 0.05)  # default low  # default high
+        # s = self.observation_space.shape
+        # bounds = 0.05
+        # low = np.ones(s) * -bounds
+        # high = np.ones(s) * bounds
 
-        low[0] = -0.5
-        high[0] = 0.5
+        # low[0] = -0.5
+        # high[0] = 0.5
+        
+        low, high = self.c.get_reset_bounds(self)
         # random state
-        self.state = self.np_random.uniform(low=low, high=high, size=s)
+        self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
         # fixed state
         # self.state = np.zeros(4)
         # self.state[0] = -0.5
@@ -411,7 +415,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                         self.state = state
                 if ev.type == pygame.MOUSEBUTTONDOWN:
                     mouse_pos = pygame.mouse.get_pos()
-                    print(mouse_pos)
+                    # print(mouse_pos)
                     if mouse_pos[1] > 300:
                         target_x = -(self.screen_width / 2 - mouse_pos[0]) / scale
                         self.target_offset = target_x
@@ -530,3 +534,72 @@ class CartPoleContinous2Env(CartPoleEnv):
         reward += x**2 * self.c.REW_FACTOR_DELTA_X_SQARED
 
         return reward, terminated, truncated, info
+    
+class CartPoleContinousSwingupEnv(CartPoleEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Box(-10, 10, (1,), float)
+        import envs.parameter.CartPoleContinousSwingupEnv as c
+
+        self.c = c
+        self.seed = c.START_SEED
+
+    def get_force(self, action):
+        return action
+
+    def calc_new_state(self, action):
+        x, x_dot, theta, theta_dot = self.state
+        force = self.get_force(action)
+
+        # based on mathematical pendulum
+
+        def rhs(t, state):
+            x, x_dot, theta, theta_dot = state
+            x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
+            g = self.gravity
+            l = self.length
+            m1 = self.masscart
+            m2 = self.masspole
+            u1 = force
+            dx1_dt = x3
+            dx2_dt = x4
+            dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
+                m1 + m2 * np.sin(x2) ** 2
+            )
+            dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
+                l * (m1 + m2 * np.sin(x2) ** 2)
+            )
+
+            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
+
+        tt = np.linspace(0, self.tau, 2)
+        xx0 = np.array(self.state).flatten()
+        s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
+
+        x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
+
+        state = (x, x_dot, theta, theta_dot)
+        return state
+
+    def get_reward(self):
+        return self.c.get_reward(self)
+        # x, x_dot, theta, theta_dot = self.state
+
+        # truncated = False
+        # info = {}
+        # terminated = bool(
+        #     x < -self.x_threshold
+        #     or x > self.x_threshold
+        # )
+        
+        # if self.ep_step_count > 500:
+        #     terminated = True
+        
+        # reward = 0
+
+        # # add punishment for leaving x=0
+        # # reward += x**2 * self.c.REW_FACTOR_DELTA_X_SQARED
+        # reward = self.c.swingup_reward() 
+        
+
+        # return reward, terminated, truncated, info

@@ -100,7 +100,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.polemass_length = self.masspole * self.length
         self.force_mag = 10.0
         self.tau = 0.02  # seconds between state updates
-        self.kinematics_integrator = "solve_ivp" #"euler"
+        self.kinematics_integrator = "solve_ivp"  # "euler"
 
         # Angle at which to fail the episode
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
@@ -110,11 +110,11 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # is still within bounds.
         high = np.array(
             [
-                self.x_threshold * 2,                   # x
-                np.finfo(np.float32).max,               # xdot
-                self.theta_threshold_radians * 2,       # phi
-                np.finfo(np.float32).max,               # phidot
-                self.x_threshold * 2,                   # target position
+                self.x_threshold * 2,  # x
+                np.finfo(np.float32).max,  # xdot
+                self.theta_threshold_radians * 2,  # phi
+                np.finfo(np.float32).max,  # phidot
+                self.x_threshold * 2,  # target position
             ],
             dtype=np.float32,
         )
@@ -154,14 +154,12 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         # For the interested reader:
         # https://coneural.org/florian/papers/05_cart_pole.pdf
-        temp = (
-            force + self.polemass_length * theta_dot**2 * sintheta
-        ) / self.total_mass
+        temp = (force + self.polemass_length * theta_dot**2 * sintheta) / self.total_mass
         thetaacc = (self.gravity * sintheta - costheta * temp) / (
             self.length * (4.0 / 3.0 - self.masspole * costheta**2 / self.total_mass)
         )
         xacc = temp - self.polemass_length * thetaacc * costheta / self.total_mass
-        
+
         if self.kinematics_integrator == "euler":
             x = x + self.tau * x_dot
             x_dot = x_dot + self.tau * xacc
@@ -173,8 +171,8 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             theta_dot = theta_dot + self.tau * thetaacc
             theta = theta + self.tau * theta_dot
 
-        if self.ep_step_count % self.target_change_period == self.target_change_period -1:
-            target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
+        if self.ep_step_count % self.target_change_period == self.target_change_period - 1:
+            target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound)  # random for training
 
         state = (x, x_dot, theta, theta_dot, target_pos)
         return state
@@ -185,7 +183,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         err_msg = f"{action!r} ({type(action)}) invalid"
         assert self.action_space.contains(action), err_msg
         assert self.state is not None, "Call reset before using step method."
-        
+
         self.state = x, x_dot, theta, theta_dot, target_pos = self.calc_new_state(action)
 
         terminated = bool(
@@ -195,6 +193,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             or theta > self.theta_threshold_radians
         )
 
+        ### --- Reward --- ###
         if not terminated:
             reward = 1.0
         elif self.steps_beyond_terminated is None:
@@ -219,7 +218,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # normalize to interval [0-1]
         max_x = 4.8
         dist = dist / (max_x + self.target_bound)
-        reward += 1-dist
+        reward += 1 - dist
 
         if self.render_mode == "human":
             self.render()
@@ -235,21 +234,21 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         super().reset(seed=seed)
         # Note that if you use custom reset bounds, it may lead to out-of-bound
         # state/observations.
-        low, high = utils.maybe_parse_reset_bounds(
-            options, -0.05, 0.05  # default low
-        )  # default high
-        
+        low, high = utils.maybe_parse_reset_bounds(options, -0.05, 0.05)  # default low  # default high
+
         # random state
         self.state = self.np_random.uniform(low=low, high=high, size=(5,))
         # fixed state
         # self.state = np.zeros(5)
         # self.state[2] = -0.05
-        
+
         self.steps_beyond_terminated = None
-        if target_pos is not None: # explicitly given
+        if target_pos is not None:  # explicitly given
             self.state[4] = target_pos
         else:
-            self.state[4] = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
+            self.state[4] = self.np_random.uniform(
+                low=-self.target_bound, high=self.target_bound
+            )  # random for training
 
         self.ep_step_count = 0
 
@@ -271,17 +270,13 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             import pygame
             from pygame import gfxdraw
         except ImportError as e:
-            raise DependencyNotInstalled(
-                "pygame is not installed, run `pip install gymnasium[classic-control]`"
-            ) from e
+            raise DependencyNotInstalled("pygame is not installed, run `pip install gymnasium[classic-control]`") from e
 
         if self.screen is None:
             pygame.init()
             if self.render_mode == "human":
                 pygame.display.init()
-                self.screen = pygame.display.set_mode(
-                    (self.screen_width, self.screen_height)
-                )
+                self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
             else:  # mode == "rgb_array"
                 self.screen = pygame.Surface((self.screen_width, self.screen_height))
         if self.clock is None:
@@ -348,45 +343,26 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             color = (0, 255, 0)
         else:
             color = (0, 100, 0)
-        gfxdraw.filled_circle(
-            self.surf,
-            int(x[4] * scale + self.screen_width / 2.0),
-            80,
-            5,
-            color
-        )
+        gfxdraw.filled_circle(self.surf, int(x[4] * scale + self.screen_width / 2.0), 80, 5, color)
 
         # show action
         if self.action == 0:
-            gfxdraw.filled_circle(
-                self.surf,
-                int(self.screen_width/2 - 10),
-                10,
-                10,
-                (0, 0, 255)
-
-            )
+            gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 - 10), 10, 10, (0, 0, 255))
         elif self.action == 1:
-            gfxdraw.filled_circle(
-                self.surf,
-                int(self.screen_width/2 + 10),
-                10,
-                10,
-                (255, 0, 0)
-            )
+            gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 + 10), 10, 10, (255, 0, 0))
         # flip coordinates
         self.surf = pygame.transform.flip(self.surf, False, True)
-        
+
         # show state on screen
         p = precision = 3
-        u.text_to_screen(self.surf, f"pos {np.round(x[0], p)}", (int(self.screen_width/2), 10))
-        u.text_to_screen(self.surf, f"vel {np.round(x[1], p)}", (int(self.screen_width/2), 30))
-        u.text_to_screen(self.surf, f"ang {np.round(x[2], p)}", (int(self.screen_width/2), 50))
-        u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width/2), 70))
-        u.text_to_screen(self.surf, f"tar {np.round(x[4], p)}", (int(self.screen_width/2), 90))
+        u.text_to_screen(self.surf, f"pos {np.round(x[0], p)}", (int(self.screen_width / 2), 10))
+        u.text_to_screen(self.surf, f"vel {np.round(x[1], p)}", (int(self.screen_width / 2), 30))
+        u.text_to_screen(self.surf, f"ang {np.round(x[2], p)}", (int(self.screen_width / 2), 50))
+        u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width / 2), 70))
+        u.text_to_screen(self.surf, f"tar {np.round(x[4], p)}", (int(self.screen_width / 2), 90))
 
-        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40,10))
-        
+        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40, 10))
+
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
             pygame.event.pump()
@@ -394,9 +370,7 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.display.flip()
 
         elif self.render_mode == "rgb_array":
-            return np.transpose(
-                np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2)
-            )
+            return np.transpose(np.array(pygame.surfarray.pixels3d(self.screen)), axes=(1, 0, 2))
 
     def close(self):
         if self.screen is not None:
@@ -405,29 +379,32 @@ class CartPoleTransitionEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
-            
+
+
 class CartPoleTransitionDiscreteEnv(CartPoleTransitionEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
         self.action_space = spaces.Discrete(2)
-    
+
     def get_force(self, action):
         force = self.force_mag if action == 1 else -self.force_mag
         return force
-    
+
+
 class CartPoleTransitionContinousEnv(CartPoleTransitionEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
         self.action_space = spaces.Box(-10, 10, (1,), float)
-    
+
     def get_force(self, action):
         return action
+
 
 class CartPoleTransitionContinous2Env(CartPoleTransitionEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
         self.action_space = spaces.Box(-10, 10, (1,), float)
-    
+
     def get_force(self, action):
         return action
 
@@ -436,10 +413,10 @@ class CartPoleTransitionContinous2Env(CartPoleTransitionEnv):
         force = self.get_force(action)
 
         # based on mathematical pendulum
-        
+
         def rhs(t, state):
             x, x_dot, theta, theta_dot = state
-            x1, x2, x3, x4 = x, theta, x_dot, theta_dot # change order
+            x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
             g = self.gravity
             l = self.length
             m1 = self.masscart
@@ -447,23 +424,23 @@ class CartPoleTransitionContinous2Env(CartPoleTransitionEnv):
             u1 = force
             dx1_dt = x3
             dx2_dt = x4
-            dx3_dt = (-g*m2*np.sin(2*x2)/2 + l*m2*theta_dot**2*np.sin(x2) + u1)/(m1 + m2*np.sin(x2)**2)
-            dx4_dt = (g*(m1 + m2)*np.sin(x2) - (l*m2*theta_dot**2*np.sin(x2) + u1)*np.cos(x2))/\
-                (l*(m1 + m2*np.sin(x2)**2))
-            
-            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt] # change order back
-        
-        
+            dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
+                m1 + m2 * np.sin(x2) ** 2
+            )
+            dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
+                l * (m1 + m2 * np.sin(x2) ** 2)
+            )
+
+            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
+
         tt = np.linspace(0, self.tau, 2)
         xx0 = np.array(self.state[:-1]).flatten()
         s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
 
-        x, x_dot, theta, theta_dot = s.y[:,-1].flatten()
-        
+        x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
 
-        if self.ep_step_count % self.target_change_period == self.target_change_period -1:
-            target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound) # random for training
+        if self.ep_step_count % self.target_change_period == self.target_change_period - 1:
+            target_pos = self.np_random.uniform(low=-self.target_bound, high=self.target_bound)  # random for training
 
         state = (x, x_dot, theta, theta_dot, target_pos)
         return state
-

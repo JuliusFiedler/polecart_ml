@@ -12,15 +12,17 @@ from util import *
 class PPOAgent:
     def __init__(self, env) -> None:
         self.env = env
-        self.model = PPO("MlpPolicy", self.env, verbose=1, seed=env.c.START_SEED)
+        self.seed = env.c.START_SEED
+        self.model = PPO("MlpPolicy", self.env, verbose=1, seed=self.seed)
 
-    def train(self, total_timesteps=300000):
+    def train(self, total_timesteps=300000, save_model=True):
         try:
             self.model.learn(total_timesteps=total_timesteps)
         except KeyboardInterrupt:
             pass
         print("Training Done")
-        self.save_model()
+        if save_model:
+            self.save_model()
 
     def save_model(self):
         # save model
@@ -55,7 +57,8 @@ class PPOAgent:
 
     def load_model(self, name):
         path = os.path.join("models", name, "model.h5")
-        self.model = PPO.load(path)
+        # self.model = PPO.load(path)
+        self.model.set_parameters(path)
         self.model_name = name
 
     def get_action(self, obs):

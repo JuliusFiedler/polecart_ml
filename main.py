@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
 
-from envs.cartpole import CartPoleDiscreteEnv, CartPoleContinous2Env
+from envs.cartpole import CartPoleDiscreteEnv, CartPoleContinous2Env, CartPoleContinousSwingupEnv
 from envs.cartpole_transition import (
     CartPoleTransitionDiscreteEnv,
     CartPoleTransitionContinousEnv,
@@ -20,14 +20,15 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 
 ### --- Mode --- ###
 # mode = "train"
-mode = "play"
+mode = "retrain"
+# mode = "play"
 # mode = "manual"
 # mode = "state_feedback"
 # mode = "compare"
 
 ### --- Environment --- ###
-# env = CartPoleDiscreteEnv()
-env = CartPoleContinous2Env()
+env = CartPoleContinousSwingupEnv()
+# env = CartPoleContinous2Env()
 env2 = CartPoleContinous2Env()
 # env = CartPoleTransitionDiscreteEnv()
 # env = CartPoleTransitionContinous2Env()
@@ -41,12 +42,19 @@ agent = PPOAgent(env)
 if mode == "train":
     print("Training")
     agent.train()
+if mode == "retrain":
+    model_name = "CartPoleContinousSwingupEnv___2023_03_07__15_28_05"
+    assert agent.env.name in model_name, "wrong environment"
+    agent.load_model(model_name)
+    # agent.model.env = env
+    print("continue Training")
+    agent.train(1000000)
 elif mode == "play":
     print("Play")
     # env = gym.make("CartPole-v1", render_mode="human")
     env.render_mode = "human"
     # agent.model.load_weights(model_path)
-    agent.load_model("CartPoleContinous2Env___2023_03_06__13_59_13")
+    agent.load_model("CartPoleContinousSwingupEnv___2023_03_07__14_54_48")
     agent.play(10)
 elif mode == "manual":
     env.render_mode = "human"
@@ -63,7 +71,7 @@ elif mode == "state_feedback":
     env.render_mode = "human"
     state1, _ = env.reset()
     while True:
-        F = F_LQR_4["F"]
+        F = F_LQR_3["F"]
         u = -F @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
         state1, reward, terminated, truncated, info = env.step(action)
@@ -76,13 +84,15 @@ elif mode == "compare":
 
     ### --- Agents 1 --- ###
     agent1 = PPOAgent(env)
-    agent1.load_model("cartpole_model__CartPoleContinous2Env___2023_03_02__16_40_49.h5")
+    agent1.load_model("CartPoleContinous2Env___2023_03_06__15_13_56")
     # F = F_LQR_2
     # agent1 = FeedbackAgent(env, F)
 
     ### --- Agents 2 --- ###
-    F = F_LQR_3
-    agent2 = FeedbackAgent(env2, F)
+    agent2 = PPOAgent(env2)
+    agent2.load_model("CartPoleContinous2Env___2023_03_07__15_35_12")
+    # F = F_LQR_3
+    # agent2 = FeedbackAgent(env2, F)
 
     ### ---------------- ###
 
