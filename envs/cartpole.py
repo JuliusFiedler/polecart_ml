@@ -192,8 +192,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         old_state = self.state
 
         self.state = self.calc_new_state(action)
-        
-        # Debug reproducibility  
+
+        # Debug reproducibility
         # with open("test.txt", "a") as f:
         #     f.write(f"\nStep. {self.total_step_count}, old State: {old_state}, Action: {action}, new State: {self.state}")
 
@@ -260,7 +260,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         # low[0] = -0.5
         # high[0] = 0.5
-        
+
         low, high = self.c.get_reset_bounds(self)
         # random state
         self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
@@ -366,7 +366,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         #     gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 - 10), 10, 10, (0, 0, 255))
         # elif self.action == 1:
         #     gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 + 10), 10, 10, (255, 0, 0))
-        
+
         # flip coordinates
         self.surf = pygame.transform.flip(self.surf, False, True)
 
@@ -383,17 +383,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # u.text_to_screen(self.surf, f"Reset", (self.screen_width - 50, 10))
         def req_res():
             self.request_reset = True
-        u.Button(
-            self.surf,
-            self.screen_width - 60,
-            5,
-            50,
-            20,
-            u.red,
-            u.light_red,
-            "Reset",
-            action=req_res
-        ).show()
+
+        u.Button(self.surf, self.screen_width - 60, 5, 50, 20, u.red, u.light_red, "Reset", action=req_res).show()
 
         self.screen.blit(self.surf, (0, 0))
         if self.render_mode == "human":
@@ -535,7 +526,8 @@ class CartPoleContinous2Env(CartPoleEnv):
         reward += x**2 * self.c.REW_FACTOR_DELTA_X_SQARED
 
         return reward, terminated, truncated, info
-    
+
+
 class CartPoleContinousSwingupEnv(CartPoleEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
@@ -584,23 +576,3 @@ class CartPoleContinousSwingupEnv(CartPoleEnv):
 
     def get_reward(self):
         return self.c.get_reward(self)
-        # x, x_dot, theta, theta_dot = self.state
-
-        # truncated = False
-        # info = {}
-        # terminated = bool(
-        #     x < -self.x_threshold
-        #     or x > self.x_threshold
-        # )
-        
-        # if self.ep_step_count > 500:
-        #     terminated = True
-        
-        # reward = 0
-
-        # # add punishment for leaving x=0
-        # # reward += x**2 * self.c.REW_FACTOR_DELTA_X_SQARED
-        # reward = self.c.swingup_reward() 
-        
-
-        # return reward, terminated, truncated, info

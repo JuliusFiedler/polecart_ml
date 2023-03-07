@@ -104,22 +104,23 @@ class Button:
         text_rect.center = (button_pos[0] + button_size[0] / 2, button_pos[1] + button_size[1] / 2)
         self.disp.blit(text_surface, text_rect)
 
+
 def project_to_interval(state, min=-np.pi, max=np.pi):
-    assert abs(min) + abs(max) == 2*np.pi, "interval is not of size 2*pi"
-    
+    assert abs(min) + abs(max) == 2 * np.pi, "interval is not of size 2*pi"
+
     if isinstance(state, np.ndarray):
         angle = state[2]
     else:
         angle = state
-        
+
     if angle < min:
         angle += np.pi * 2
     elif angle > max:
         angle -= np.pi * 2
-    
+
     if isinstance(state, np.ndarray):
         state[2] = angle
     else:
         state = angle
-    
+
     return state
