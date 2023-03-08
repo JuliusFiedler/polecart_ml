@@ -41,7 +41,7 @@ class FeedforwardAgent:
             a = np.clip(a, self.env.action_space.low[0], self.env.action_space.high[0])
         except IndexError as e:
             a = np.clip(np.array([0]), self.env.action_space.low[0], self.env.action_space.high[0])
-            util.yellow(f"Feedforward Controller at end of trajectory. Output will be 0 from now on.")
+            util.yellow(f"WARNING: Feedforward Controller at end of trajectory. Output will be 0 from now on.")
             self.trajectory_end = True
         self.counter += 1
         return a

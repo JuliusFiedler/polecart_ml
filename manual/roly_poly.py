@@ -38,12 +38,8 @@ class RolyPolyAgent:
                 print("Swingup")
             # pole is near upper EQ point -> start upper EQ controller
             elif abs(obs[2]) < 0.1 and self.goal == 1:
-                self.swingup_controller.reset_trajectory()
-                self.goal = 2
-                print("Upper EQ")
-            # swingup feedforward reached end of trajectory
-            elif self.goal == 1 and current_agent.trajectory_end:
-                self.swingup_controller.reset_trajectory()
+                if hasattr(self.swingup_controller, "reset_trajectory"):
+                    self.swingup_controller.reset_trajectory()
                 self.goal = 2
                 print("Upper EQ")
             # pole left upper EQ -> go back to start
@@ -54,3 +50,4 @@ class RolyPolyAgent:
             if terminated or truncated:
                 obs, _ = self.env.reset()
                 self.goal = 0
+                print("Lower EQ")

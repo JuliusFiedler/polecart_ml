@@ -378,7 +378,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if self.action is not None:
             u.text_to_screen(self.surf, f"Act {np.round(self.action, p)}", (int(self.screen_width / 2), 120))
 
-        u.text_to_screen(self.surf, f"Episode {self.episode_count}", (40, 10))
+        u.text_to_screen(self.surf, f"Episode {self.episode_count}", (43, 10))
         u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40, 30))
 
         self.screen.blit(self.surf, (0, 0))

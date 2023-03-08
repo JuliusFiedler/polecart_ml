@@ -117,7 +117,6 @@ elif mode == "generate swingup trajectory":
     actions = []
     for i in range(400):
         F = F_LQR_LOWER_EQ_1
-        # state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
         u = -F["F"] @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
         actions.append(action[0])
@@ -158,9 +157,16 @@ elif mode == "input from file":
             state1, _ = env.reset()
 elif mode == "rp":
     env.render_mode = "human"
+    # L_EQ_agent = FeedbackAgent(env, F_LQR_LOWER_EQ_1)
+    # U_EQ_agent = FeedbackAgent(env, F_LQR_2)
+    # swingup_agent = FeedforwardAgent(env, "cartpole_swingup_1.csv")
+    
     L_EQ_agent = FeedbackAgent(env, F_LQR_LOWER_EQ_1)
-    U_EQ_agent = FeedbackAgent(env, F_LQR_2)
-    swingup_agent = FeedforwardAgent(env, "cartpole_swingup_1.csv")
+    U_EQ_agent = PPOAgent(env)
+    U_EQ_agent.load_model("CartPoleContinous2Env___2023_03_06__15_13_42")
+    swingup_agent = PPOAgent(env)
+    swingup_agent.load_model("CartPoleContinousSwingupEnv___2023_03_08__11_19_29")
+    
     agent = RolyPolyAgent(env, L_EQ_agent, U_EQ_agent, swingup_agent)
     agent.play()
 
