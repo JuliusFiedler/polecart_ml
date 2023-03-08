@@ -1,4 +1,8 @@
 import numpy as np
+import csv
+import os
+
+import util
 
 
 class FeedbackAgent:
@@ -8,9 +12,43 @@ class FeedbackAgent:
         self.model_name = F["note"]
 
     def get_action(self, state):
+        state = util.project_to_interval(state - self.F["eq"], min=-np.pi, max=np.pi)
         u = -self.F["F"] @ np.array(state)
         action = np.clip(u, self.env.action_space.low[0], self.env.action_space.high[0])
         return action
+
+
+class FeedforwardAgent:
+    def __init__(self, env, path):
+        self.env = env
+
+        if os.path.isabs(path):
+            self.path = path
+        else:
+            self.path = os.path.join(util.ROOT_PATH, "trajectories", path)
+        with open(self.path, newline="") as csvfile:
+            self.actions = []
+            reader = csv.reader(csvfile, delimiter=",")
+            for row in reader:
+                self.actions.append(row[0])
+
+        self.counter = 0
+        self.trajectory_end = False
+
+    def get_action(self, obs):
+        try:
+            a = np.array([self.actions[self.counter]], dtype=float)
+            a = np.clip(a, self.env.action_space.low[0], self.env.action_space.high[0])
+        except IndexError as e:
+            a = np.clip(np.array([0]), self.env.action_space.low[0], self.env.action_space.high[0])
+            util.yellow(f"Feedforward Controller at end of trajectory. Output will be 0 from now on.")
+            self.trajectory_end = True
+        self.counter += 1
+        return a
+
+    def reset_trajectory(self):
+        self.counter = 0
+        self.trajectory_end = False
 
 
 F_EV_imag_1 = {

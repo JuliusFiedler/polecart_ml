@@ -12,7 +12,8 @@ from envs.cartpole_transition import (
 )
 from CrossEntropyLearning.cartpoleAgent1_gymnasium import Agent
 from ppo.ppo_agent import PPOAgent
-from classical.feedback_agent import *
+from manual.roly_poly import RolyPolyAgent
+from classical.classical_control import *
 import util
 from callbacks.callback import *
 
@@ -28,7 +29,8 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 # mode = "manual"
 # mode = "state_feedback"
 # mode = "generate swingup trajectory"
-mode = "input from file"
+# mode = "input from file"
+mode = "rp"
 # mode = "compare"
 
 
@@ -114,8 +116,8 @@ elif mode == "generate swingup trajectory":
     state1, _ = env.reset(state=np.array([0, 0, 0.1, 0]))
     actions = []
     for i in range(400):
-        F = F_EV_real_LOWER_EQ_2
-        state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
+        F = F_LQR_LOWER_EQ_1
+        # state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
         u = -F["F"] @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
         actions.append(action[0])
@@ -154,6 +156,13 @@ elif mode == "input from file":
         state1, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
             state1, _ = env.reset()
+elif mode == "rp":
+    env.render_mode = "human"
+    L_EQ_agent = FeedbackAgent(env, F_LQR_LOWER_EQ_1)
+    U_EQ_agent = FeedbackAgent(env, F_LQR_2)
+    swingup_agent = FeedforwardAgent(env, "cartpole_swingup_1.csv")
+    agent = RolyPolyAgent(env, L_EQ_agent, U_EQ_agent, swingup_agent)
+    agent.play()
 
 elif mode == "compare":
     ### --- Paras --- ###

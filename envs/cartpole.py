@@ -388,7 +388,6 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
             def req_res():
                 self.request_reset = True
-                IPS()
 
             self.reset_button = u.Button(
                 self.screen, self.screen_width - 60, 5, 50, 20, u.red, u.light_red, "Reset", action=req_res
