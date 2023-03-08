@@ -14,6 +14,7 @@ from manual.manual import ManualAgent
 from ppo.ppo_agent import PPOAgent
 from classical.feedback_agent import *
 import util
+from callbacks.callback import *
 
 np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
@@ -23,9 +24,11 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 # mode = "train"
 # mode = "retrain"
 # mode = "play"
+mode = "cooperative"
 # mode = "manual"
-mode = "state_feedback"
+# mode = "state_feedback"
 # mode = "compare"
+
 
 ### --- Environment --- ###
 env = CartPoleContinousSwingupEnv()
@@ -39,12 +42,14 @@ env2 = CartPoleContinous2Env()
 agent = PPOAgent(env)
 # agent = ManualAgent(env)
 
+### --- Callback --- ###
+callback = CustomCallback()
 
 if mode == "train":
     print("Training")
-    agent.train()
+    agent.train(total_timesteps=1e6, callback=callback)
 if mode == "retrain":
-    model_name = "CartPoleContinousSwingupEnv___2023_03_07__15_28_05"
+    model_name = "CartPoleContinousSwingupEnv___2023_03_08__11_14_01"
     assert agent.env.name in model_name, "wrong environment"
     agent.load_model(model_name)
     # agent.model.env = env
@@ -52,11 +57,34 @@ if mode == "retrain":
     agent.train(1000000)
 elif mode == "play":
     print("Play")
-    # env = gym.make("CartPole-v1", render_mode="human")
     env.render_mode = "human"
-    # agent.model.load_weights(model_path)
-    agent.load_model("CartPoleContinousSwingupEnv___2023_03_07__16_24_24")
+    agent.load_model("CartPoleContinous2Env___2023_03_06__15_13_42")
     agent.play(10)
+elif mode == "cooperative":
+    env.render_mode = "human"
+    swingup_agent = (
+        "CartPoleContinousSwingupEnv___2023_03_08__11_14_01"  # CartPoleContinousSwingupEnv___2023_03_08__11_16_25
+    )
+    balance_agent = "CartPoleContinous2Env___2023_03_06__15_13_42"
+    agent.load_model(swingup_agent)
+
+    catch_threshold = 0.5
+    current_agent = swingup_agent
+    obs, _ = env.reset()
+    while True:
+        if current_agent == swingup_agent and np.abs(util.project_to_interval(obs[2])) <= catch_threshold:
+            current_agent = balance_agent
+            agent.load_model(balance_agent)
+            print("switching to balance")
+        if current_agent == balance_agent and np.abs(util.project_to_interval(obs[2])) > catch_threshold:
+            current_agent = swingup_agent
+            agent.load_model(swingup_agent)
+            print("switching to swingup")
+
+        action, _states = agent.model.predict(obs, deterministic=True)
+        obs, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            obs, _ = env.reset()
 elif mode == "manual":
     env.render_mode = "human"
     env.reset()
@@ -72,7 +100,7 @@ elif mode == "state_feedback":
     env.render_mode = "human"
     state1, _ = env.reset()
     while True:
-        F = F_EV_real_LOWER_EQ_1
+        F = F_EV_real_LOWER_EQ_2
         state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
         u = -F["F"] @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])

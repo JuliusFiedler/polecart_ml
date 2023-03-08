@@ -5,7 +5,9 @@ sys.modules["gym"] = gymnasium
 import datetime as dt
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.monitor import Monitor
 from ipydex import IPS
+
 from util import *
 
 
@@ -13,37 +15,65 @@ class PPOAgent:
     def __init__(self, env) -> None:
         self.env = env
         self.seed = env.c.START_SEED
-        self.model = PPO("MlpPolicy", self.env, verbose=1, seed=self.seed)
+        self.model = None
+        self.tensorboard_log = None
 
-    def train(self, total_timesteps=300000, save_model=True):
+    def create_model(self):
+        self.model = PPO("MlpPolicy", self.env, verbose=1, seed=self.seed, tensorboard_log=self.tensorboard_log)
+
+    def train(self, total_timesteps=300000, callback=None, save_model=True):
+        # Create Folders and setup logs
+        if save_model:
+            t = dt.datetime.now().strftime("_%Y_%m_%d__%H_%M_%S")
+            name = self.env.name + "__" + t
+            self.folder_path = os.path.join(ROOT_PATH, "models", name)
+            os.makedirs(self.folder_path)
+
+            self.env = Monitor(self.env, filename=self.folder_path)
+
+            self.tensorboard_log = self.folder_path
+
+            if callback is not None:
+                callback.log_path = self.folder_path
+
+            # save metadata, pre training!
+            para_file_path = self.env.c.__file__
+            para_file = None
+            with open(para_file_path, "r") as f:
+                para_file = f.read()
+            metadata_path = os.path.join(self.folder_path, "metadata.txt")
+            with open(metadata_path, "w") as f:
+                f.write(para_file)
+
+        # create Model
+        if self.model is None:
+            self.create_model()
+        # Training
         self.env.training = True
         try:
-            self.model.learn(total_timesteps=total_timesteps)
+            self.model.learn(total_timesteps=total_timesteps, callback=callback)
         except KeyboardInterrupt:
             pass
         print("Training Done")
+        # Save Model data
         if save_model:
             self.save_model()
         self.env.training = False
 
     def save_model(self):
         # save model
-        t = dt.datetime.now().strftime("_%Y_%m_%d__%H_%M_%S")
-        name = self.env.name + "__" + t
-        folder_path = os.path.join(ROOT_PATH, "models", name)
-        os.makedirs(folder_path)
-        model_path = os.path.join(folder_path, "model.h5")
+        model_path = os.path.join(self.folder_path, "model.h5")
         self.model.save(model_path)
         print(f"Model saved at {model_path}")
         # save metadata
         try:
-            para_file_path = self.env.c.__file__
-            para_file = None
-            with open(para_file_path, "r") as f:
-                para_file = f.read()
-            metadata_path = os.path.join(folder_path, "metadata.txt")
-            with open(metadata_path, "w") as f:
-                f.write(para_file)
+            # para_file_path = self.env.c.__file__
+            # para_file = None
+            # with open(para_file_path, "r") as f:
+            #     para_file = f.read()
+            metadata_path = os.path.join(self.folder_path, "metadata.txt")
+            with open(metadata_path, "a") as f:
+                # f.write(para_file)
                 f.writelines(
                     [
                         "\n",
@@ -58,6 +88,8 @@ class PPOAgent:
             IPS()
 
     def load_model(self, name):
+        if self.model is None:
+            self.create_model()
         path = os.path.join("models", name, "model.h5")
         # self.model = PPO.load(path)
         self.model.set_parameters(path)

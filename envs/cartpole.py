@@ -140,10 +140,12 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.isopen = True
         self.state = None
         self.action = None
+        self.reward = None
 
         # UI variables
         self.target_offset = 0
         self.request_reset = False
+        self.reset_button = None  # initialize some objects, that have to be persistent and not be recreated each step
 
         self.steps_beyond_terminated = None
 
@@ -197,7 +199,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # with open("test.txt", "a") as f:
         #     f.write(f"\nStep. {self.total_step_count}, old State: {old_state}, Action: {action}, new State: {self.state}")
 
-        reward, terminated, truncated, info = self.get_reward()
+        self.reward, terminated, truncated, info = self.get_reward()
 
         if self.render_mode == "human":
             self.render()
@@ -208,7 +210,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if self.request_reset:
             truncated = True
 
-        return state, reward, terminated, truncated, info
+        return state, self.reward, terminated, truncated, info
 
     def get_reward(self):
         x, x_dot, theta, theta_dot = self.state
@@ -376,17 +378,26 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         u.text_to_screen(self.surf, f"vel {np.round(x[1], p)}", (int(self.screen_width / 2), 30))
         u.text_to_screen(self.surf, f"ang {np.round(x[2], p)}", (int(self.screen_width / 2), 50))
         u.text_to_screen(self.surf, f"ome {np.round(x[3], p)}", (int(self.screen_width / 2), 70))
+        if self.reward is not None:
+            u.text_to_screen(self.surf, f"Rew {np.round(self.reward, p)}", (int(self.screen_width / 2), 100))
+        if self.action is not None:
+            u.text_to_screen(self.surf, f"Act {np.round(self.action, p)}", (int(self.screen_width / 2), 120))
 
         u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40, 10))
 
-        # reset button
-        # u.text_to_screen(self.surf, f"Reset", (self.screen_width - 50, 10))
-        def req_res():
-            self.request_reset = True
-
-        u.Button(self.surf, self.screen_width - 60, 5, 50, 20, u.red, u.light_red, "Reset", action=req_res).show()
-
         self.screen.blit(self.surf, (0, 0))
+
+        # reset button
+        if self.reset_button is None:
+
+            def req_res():
+                self.request_reset = True
+
+            self.reset_button = u.Button(
+                self.screen, self.screen_width - 60, 5, 50, 20, u.red, u.light_red, "Reset", action=req_res
+            )
+        self.reset_button.show()
+
         if self.render_mode == "human":
             pygame.event.pump()
 
