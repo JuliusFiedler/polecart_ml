@@ -2,6 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
+import csv
 
 from envs.cartpole import CartPoleDiscreteEnv, CartPoleContinous2Env, CartPoleContinousSwingupEnv
 from envs.cartpole_transition import (
@@ -10,7 +11,6 @@ from envs.cartpole_transition import (
     CartPoleTransitionContinous2Env,
 )
 from CrossEntropyLearning.cartpoleAgent1_gymnasium import Agent
-from manual.manual import ManualAgent
 from ppo.ppo_agent import PPOAgent
 from classical.feedback_agent import *
 import util
@@ -24,9 +24,11 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 # mode = "train"
 # mode = "retrain"
 # mode = "play"
-mode = "cooperative"
+# mode = "cooperative"
 # mode = "manual"
 # mode = "state_feedback"
+# mode = "generate swingup trajectory"
+mode = "input from file"
 # mode = "compare"
 
 
@@ -98,9 +100,54 @@ elif mode == "manual":
 
 elif mode == "state_feedback":
     env.render_mode = "human"
-    state1, _ = env.reset()
+    state1, _ = env.reset(state=np.array([0, 0, 0.1, 0]))
     while True:
         F = F_EV_real_LOWER_EQ_2
+        state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
+        u = -F["F"] @ np.array(state1)
+        action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
+        state1, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            state1, _ = env.reset()
+elif mode == "generate swingup trajectory":
+    env.render_mode = "human"
+    state1, _ = env.reset(state=np.array([0, 0, 0.1, 0]))
+    actions = []
+    for i in range(400):
+        F = F_EV_real_LOWER_EQ_2
+        state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
+        u = -F["F"] @ np.array(state1)
+        action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
+        actions.append(action[0])
+        state1, reward, terminated, truncated, info = env.step(action)
+        if terminated or truncated:
+            assert False, "there should be no reset during this process"
+    actions.reverse()
+    # get rid of slow start where nothing happens
+    for i, action in enumerate(actions):
+        if action >= 0.01:
+            actions = actions[i:]
+            break
+    with open("trajectories/cartpole_swingup_1.csv", mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile, delimiter=",")
+        for action in actions:
+            writer.writerow([action])
+elif mode == "input from file":
+    env.render_mode = "human"
+    state1, _ = env.reset(state=np.array([0, 0, np.pi, 0]))
+    with open("trajectories/cartpole_swingup_1.csv", newline="") as csvfile:
+        actions = []
+        reader = csv.reader(csvfile, delimiter=",")
+        for row in reader:
+            actions.append(row[0])
+    for action in actions:
+        state, _, _, _, _ = env.step(-np.array([action], dtype=float))
+        if abs(state[2]) < 0.1:
+            break
+    print("swingup done")
+
+    while True:
+        F = F_LQR_2
         state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
         u = -F["F"] @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
@@ -115,13 +162,13 @@ elif mode == "compare":
     ### --- Agents 1 --- ###
     agent1 = PPOAgent(env)
     agent1.load_model("CartPoleContinous2Env___2023_03_06__15_13_56")
-    # F = F_LQR_2
+    # F = F_LQR_2["F"]
     # agent1 = FeedbackAgent(env, F)
 
     ### --- Agents 2 --- ###
     agent2 = PPOAgent(env2)
     agent2.load_model("CartPoleContinous2Env___2023_03_07__15_35_12")
-    # F = F_LQR_3
+    # F = F_LQR_3["F"]
     # agent2 = FeedbackAgent(env2, F)
 
     ### ---------------- ###

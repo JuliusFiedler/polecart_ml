@@ -5,7 +5,7 @@ permalink: https://perma.cc/C9ZM-652R
 """
 import math
 from typing import Optional, Union
-
+import os
 import numpy as np
 from scipy.integrate import solve_ivp
 from ipydex import IPS
@@ -146,6 +146,7 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.target_offset = 0
         self.request_reset = False
         self.reset_button = None  # initialize some objects, that have to be persistent and not be recreated each step
+        self.debug_button = None  # initialize some objects, that have to be persistent and not be recreated each step
 
         self.steps_beyond_terminated = None
 
@@ -248,27 +249,19 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         *,
         seed: Optional[int] = None,
         options: Optional[dict] = None,
+        state=None,
     ):
         if seed is None and self.seed is not None:
             seed = self.seed + self.episode_count
         super().reset(seed=seed)
-        # Note that if you use custom reset bounds, it may lead to out-of-bound
-        # state/observations.
-        # low, high = utils.maybe_parse_reset_bounds(options, -0.05, 0.05)  # default low  # default high
-        # s = self.observation_space.shape
-        # bounds = 0.05
-        # low = np.ones(s) * -bounds
-        # high = np.ones(s) * bounds
 
-        # low[0] = -0.5
-        # high[0] = 0.5
-
-        low, high = self.c.get_reset_bounds(self)
-        # random state
-        self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
-        # fixed state
-        # self.state = np.zeros(4)
-        # self.state[0] = -0.5
+        if state is None:
+            # random state
+            low, high = self.c.get_reset_bounds(self)
+            self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
+        else:
+            # fixed state
+            self.state = state
 
         self.steps_beyond_terminated = None
         self.target_offset = 0
@@ -300,6 +293,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if self.screen is None:
             pygame.init()
             if self.render_mode == "human":
+                # TODO does this work if there is only one screen?
+                os.environ["SDL_VIDEO_WINDOW_POS"] = f"{2000},{400}"
                 pygame.display.init()
                 self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
             else:  # mode == "rgb_array"
@@ -383,7 +378,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if self.action is not None:
             u.text_to_screen(self.surf, f"Act {np.round(self.action, p)}", (int(self.screen_width / 2), 120))
 
-        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40, 10))
+        u.text_to_screen(self.surf, f"Episode {self.episode_count}", (40, 10))
+        u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40, 30))
 
         self.screen.blit(self.surf, (0, 0))
 
@@ -392,11 +388,33 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
             def req_res():
                 self.request_reset = True
+                IPS()
 
             self.reset_button = u.Button(
                 self.screen, self.screen_width - 60, 5, 50, 20, u.red, u.light_red, "Reset", action=req_res
             )
         self.reset_button.show()
+
+        # pause / debug button
+        if self.debug_button is None:
+
+            def ips():
+                self
+                IPS()
+
+            self.debug_button = u.Button(
+                self.screen,
+                self.screen_width - 60,
+                35,
+                50,
+                20,
+                u.blue,
+                u.light_blue,
+                "Pause",
+                text_color=u.white,
+                action=ips,
+            )
+        self.debug_button.show()
 
         if self.render_mode == "human":
             pygame.event.pump()

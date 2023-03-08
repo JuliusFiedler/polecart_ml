@@ -8,10 +8,11 @@ ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 white = (255, 255, 255)
 black = (0, 0, 0)
 green = (0, 255, 0)
-blue = (0, 0, 255)
+blue = (0, 0, 200)
 red = (255, 0, 0)
 red = (200, 0, 0)
 light_red = (255, 0, 0)
+light_blue = (0, 0, 255)
 
 
 def bright(txt):
