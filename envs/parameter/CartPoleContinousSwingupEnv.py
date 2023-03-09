@@ -2,6 +2,8 @@
 import numpy as np
 import util as u
 
+from envs.cartpole import CartPoleEnv
+
 # Seed
 START_SEED = 1
 
@@ -15,7 +17,7 @@ def get_reset_bounds(env):
 
 
 # Rewards
-def get_reward(env):
+def get_reward(env: CartPoleEnv):
     x, x_dot, theta, theta_dot = env.state
 
     truncated = False
@@ -26,16 +28,25 @@ def get_reward(env):
         terminated = True
         print("reset after 1000 steps")
 
-    # reward = 10.0 - 10.0 * np.abs(u.project_to_interval(theta)) - 0.01 * np.abs(x)
-    reward_theta = (np.cos(theta) + 1.0) / 2.0
-    reward_x = np.cos((x / env.x_threshold) * (np.pi / 2.0))
+    # reward_theta = (np.cos(theta) + 1.0) / 2.0
+    # reward_x = np.cos((x / env.x_threshold) * (np.pi / 2.0))
+    # reward = reward_theta * reward_x
 
-    reward = reward_theta * reward_x
+    T = 0.5 * env.masscart * x_dot**2 + 0.5 * env.masspole * (env.length * theta_dot) ** 2
+    V = env.masspole * env.gravity * env.length * np.cos(theta)
+    E = T + V
+
+    Eopt = env.masspole * env.gravity * env.length
+
+    reward = 1 / (1 + (E - Eopt) ** 2)
+
+    if np.abs(theta) < 0.1:
+        reward += 100
 
     return reward, terminated, truncated, info
 
 
 ### -------------------------------------------- ###
 """Comment Block
-source: https://codesuche.com/view-source/python/google/brain-tokyo-workshop/learntopredict/cartpole/cartpole_swingup.py/
+energy based approach
 """

@@ -1,5 +1,6 @@
 import gymnasium
 import sys, os
+import datetime
 
 sys.modules["gym"] = gymnasium
 import datetime as dt
@@ -50,10 +51,13 @@ class PPOAgent:
         if self.model is None:
             self.create_model()
         # Training
+        t1 = datetime.datetime.now()
         try:
             self.model.learn(total_timesteps=total_timesteps, callback=callback)
         except KeyboardInterrupt:
             pass
+        t2 = datetime.datetime.now()
+        self.training_time = smooth_timedelta(t1, t2)
         print("Training Done")
         # Save Model data
         if save_model:
@@ -79,7 +83,7 @@ class PPOAgent:
                         "\n",
                         f"\nTotal Training Steps: {self.env.total_step_count}",
                         f"\nTotal Episode Count: {self.env.episode_count}",
-                        f"\nTraining Duration: " + smooth_time(self.model.logger.name_to_value["time/time_elapsed"]),
+                        f"\nTraining Duration: {self.training_time}",
                     ]
                 )
         except Exception as e:

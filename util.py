@@ -2,6 +2,7 @@ import pygame as pg
 import numpy as np
 import os
 from colorama import Style, Fore
+import datetime
 
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -136,8 +137,12 @@ def project_to_interval(state, min=-np.pi, max=np.pi):
 # based on
 # source: https://stackoverflow.com/a/46928226/333403
 # by chidimo
-def smooth_time(secs):
-    """Convert Seconds into Days, Hours, Minutes, Seconds."""
+def smooth_timedelta(start_datetime, end_datetime=None):
+    """Convert a datetime.timedelta object into Days, Hours, Minutes, Seconds."""
+    if end_datetime is None:
+        end_datetime = datetime.datetime.now()
+    timedeltaobj = end_datetime - start_datetime
+    secs = timedeltaobj.total_seconds()
     timetot = ""
     if secs > 86400:  # 60sec * 60min * 24hrs
         days = secs // 86400

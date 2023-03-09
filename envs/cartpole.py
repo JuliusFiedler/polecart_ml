@@ -522,38 +522,7 @@ class CartPoleContinous2Env(CartPoleEnv):
         return state
 
     def get_reward(self):
-        x, x_dot, theta, theta_dot = self.state
-
-        truncated = False
-        info = {}
-        terminated = bool(
-            x < -self.x_threshold
-            or x > self.x_threshold
-            or theta < -self.theta_threshold_radians
-            or theta > self.theta_threshold_radians
-        )
-
-        if not terminated:
-            reward = self.c.REW_STEP
-        elif self.steps_beyond_terminated is None:
-            # Pole just fell!
-            self.steps_beyond_terminated = 0
-            reward = self.c.REW_STEP
-        else:
-            if self.steps_beyond_terminated == 0:
-                logger.warn(
-                    "You are calling 'step()' even though this "
-                    "environment has already returned terminated = True. You "
-                    "should always call 'reset()' once you receive 'terminated = "
-                    "True' -- any further steps are undefined behavior."
-                )
-            self.steps_beyond_terminated += 1
-            reward = 0.0
-
-        # add punishment for leaving x=0
-        reward += x**2 * self.c.REW_FACTOR_DELTA_X_SQARED
-
-        return reward, terminated, truncated, info
+        return self.c.get_reward(self)
 
 
 class CartPoleContinousSwingupEnv(CartPoleEnv):

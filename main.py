@@ -22,9 +22,9 @@ folder_path = os.path.abspath(os.path.dirname(__file__))
 model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transition_crossentropy.h5")
 
 ### --- Mode --- ###
-mode = "train"
+# mode = "train"
 # mode = "retrain"
-# mode = "play"
+mode = "play"
 # mode = "cooperative"
 # mode = "manual"
 # mode = "state_feedback"
@@ -65,7 +65,7 @@ if mode == "retrain":
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinousSwingupEnv___2023_03_09__10_57_49")
+    agent.load_model("CartPoleContinousSwingupEnv___2023_03_09__16_52_33")
     agent.play(10)
 
 elif mode == "cooperative":
@@ -109,7 +109,7 @@ elif mode == "state_feedback":
     env.render_mode = "human"
     state1, _ = env.reset(state=np.array([0, 0, 0.1, 0]))
     while True:
-        F = F_EV_real_LOWER_EQ_2
+        F = F_LQR_2
         state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
         u = -F["F"] @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
@@ -176,7 +176,7 @@ elif mode == "rp":
     U_EQ_agent = PPOAgent(env)
     U_EQ_agent.load_model("CartPoleContinous2Env___2023_03_06__15_13_42")
     swingup_agent = PPOAgent(env)
-    swingup_agent.load_model("CartPoleContinousSwingupEnv___2023_03_09__09_58_09")
+    swingup_agent.load_model("CartPoleContinousSwingupEnv___2023_03_09__14_51_57")
 
     agent = RolyPolyAgent(env, L_EQ_agent, U_EQ_agent, swingup_agent)
     agent.play()
