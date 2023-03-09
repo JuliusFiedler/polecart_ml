@@ -22,6 +22,7 @@ class PPOAgent:
         self.model = PPO("MlpPolicy", self.env, verbose=1, seed=self.seed, tensorboard_log=self.tensorboard_log)
 
     def train(self, total_timesteps=300000, callback=None, save_model=True):
+        self.env.training = True
         # Create Folders and setup logs
         if save_model:
             t = dt.datetime.now().strftime("_%Y_%m_%d__%H_%M_%S")
@@ -49,7 +50,6 @@ class PPOAgent:
         if self.model is None:
             self.create_model()
         # Training
-        self.env.training = True
         try:
             self.model.learn(total_timesteps=total_timesteps, callback=callback)
         except KeyboardInterrupt:
@@ -79,6 +79,7 @@ class PPOAgent:
                         "\n",
                         f"\nTotal Training Steps: {self.env.total_step_count}",
                         f"\nTotal Episode Count: {self.env.episode_count}",
+                        f"\nTraining Duration: " + smooth_time(self.model.logger.name_to_value["time/time_elapsed"]),
                     ]
                 )
         except Exception as e:

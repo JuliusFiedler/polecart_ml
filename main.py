@@ -22,7 +22,7 @@ folder_path = os.path.abspath(os.path.dirname(__file__))
 model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transition_crossentropy.h5")
 
 ### --- Mode --- ###
-# mode = "train"
+mode = "train"
 # mode = "retrain"
 # mode = "play"
 # mode = "cooperative"
@@ -30,8 +30,9 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 # mode = "state_feedback"
 # mode = "generate swingup trajectory"
 # mode = "input from file"
-mode = "rp"
+# mode = "rp"
 # mode = "compare"
+# mode = "test"
 
 
 ### --- Environment --- ###
@@ -52,6 +53,7 @@ callback = CustomCallback()
 if mode == "train":
     print("Training")
     agent.train(total_timesteps=1e6, callback=callback)
+
 if mode == "retrain":
     model_name = "CartPoleContinousSwingupEnv___2023_03_08__11_14_01"
     assert agent.env.name in model_name, "wrong environment"
@@ -59,11 +61,13 @@ if mode == "retrain":
     # agent.model.env = env
     print("continue Training")
     agent.train(1000000)
+
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_03_06__15_13_42")
+    agent.load_model("CartPoleContinousSwingupEnv___2023_03_09__10_57_49")
     agent.play(10)
+
 elif mode == "cooperative":
     env.render_mode = "human"
     swingup_agent = (
@@ -89,6 +93,7 @@ elif mode == "cooperative":
         obs, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
             obs, _ = env.reset()
+
 elif mode == "manual":
     env.render_mode = "human"
     env.reset()
@@ -111,28 +116,33 @@ elif mode == "state_feedback":
         state1, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
             state1, _ = env.reset()
+
 elif mode == "generate swingup trajectory":
     env.render_mode = "human"
+    agent = FeedbackAgent(env, F_LQR_LOWER_EQ_1)
     state1, _ = env.reset(state=np.array([0, 0, 0.1, 0]))
     actions = []
+    states = []
     for i in range(400):
-        F = F_LQR_LOWER_EQ_1
-        u = -F["F"] @ np.array(state1)
-        action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
+        states.append(state1)
+        action = agent.get_action(state1)
         actions.append(action[0])
         state1, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
             assert False, "there should be no reset during this process"
     actions.reverse()
+    states.reverse()
     # get rid of slow start where nothing happens
     for i, action in enumerate(actions):
         if action >= 0.01:
             actions = actions[i:]
+            states = states[i:]
             break
-    with open("trajectories/cartpole_swingup_1.csv", mode="w", newline="") as csvfile:
+    with open("trajectories/cartpole_swingup_state_and_action.csv", mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile, delimiter=",")
-        for action in actions:
-            writer.writerow([action])
+        for i in range(len(actions)):
+            writer.writerow([*states[i], actions[i]])
+
 elif mode == "input from file":
     env.render_mode = "human"
     state1, _ = env.reset(state=np.array([0, 0, np.pi, 0]))
@@ -155,18 +165,19 @@ elif mode == "input from file":
         state1, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
             state1, _ = env.reset()
+
 elif mode == "rp":
     env.render_mode = "human"
     # L_EQ_agent = FeedbackAgent(env, F_LQR_LOWER_EQ_1)
     # U_EQ_agent = FeedbackAgent(env, F_LQR_2)
     # swingup_agent = FeedforwardAgent(env, "cartpole_swingup_1.csv")
-    
+
     L_EQ_agent = FeedbackAgent(env, F_LQR_LOWER_EQ_1)
     U_EQ_agent = PPOAgent(env)
     U_EQ_agent.load_model("CartPoleContinous2Env___2023_03_06__15_13_42")
     swingup_agent = PPOAgent(env)
-    swingup_agent.load_model("CartPoleContinousSwingupEnv___2023_03_08__11_19_29")
-    
+    swingup_agent.load_model("CartPoleContinousSwingupEnv___2023_03_09__09_58_09")
+
     agent = RolyPolyAgent(env, L_EQ_agent, U_EQ_agent, swingup_agent)
     agent.play()
 
@@ -266,3 +277,21 @@ elif mode == "compare":
     ax2[1].legend()
     ax2[1].grid()
     plt.show()
+
+elif mode == "test":
+    from ppo.supervised import PretrainedNet
+    import torch
+
+    net = PretrainedNet()
+    net.load_state_dict(torch.load("trajectories/swingupNN.pth"))
+
+    env.render_mode = "human"
+    state, _ = env.reset(state=np.array([0, 0, np.pi, 0]))
+    while True:
+        action = net(torch.from_numpy(state)).detach().numpy()
+        action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
+        state, r, ter, tru, _ = env.step(action)
+        if abs(state[2]) < 0.1:
+            print("swingup done")
+        if ter:
+            state, _ = env.reset()
