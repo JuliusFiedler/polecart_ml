@@ -1,6 +1,7 @@
 import gymnasium
 import sys, os
 import datetime
+import matplotlib.pyplot as plt
 
 sys.modules["gym"] = gymnasium
 import datetime as dt
@@ -62,6 +63,7 @@ class PPOAgent:
         # Save Model data
         if save_model:
             self.save_model()
+        self.eval()
         self.env.training = False
 
     def save_model(self):
@@ -114,3 +116,29 @@ class PPOAgent:
                 obs, reward, done, trunc, info = self.env.step(action)
                 r_sum += reward
             print("Reward Ep ", i, r_sum)
+
+    def eval(self):
+        xs = []
+        phis = []
+        for i in range(3):
+            obs, _ = self.env.reset(state=np.array(self.env.c.EVAL_STATE) / (i + 2))
+            for j in range(1000):
+                xs.append(obs[0])
+                phis.append(obs[2])
+                action, _ = self.model.predict(obs, deterministic=True)
+                obs, reward, done, trunc, info = self.env.step(action)
+                if done:
+                    break
+        plt.plot(np.arange(len(xs)), xs, label=r"$x$")
+        plt.plot(np.arange(len(phis)), phis, label=r"$\varphi$")
+        plt.legend()
+        plt.title("Evaluation Episodes")
+        path = os.path.join("models", self.model_name, "eval.pdf")
+        plt.savefig(path, format="pdf")
+
+        mean_phi = np.mean(phis)
+        mean_x = np.mean(xs)
+
+        with open(os.path.join("models", self.model_name, "eval.txt"), "w") as f:
+            f.write(f"mean phi: {round(mean_phi, 4)}\n")
+            f.write(f"mean x: {round(mean_x, 4)}")

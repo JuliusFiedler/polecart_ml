@@ -7,12 +7,15 @@ from envs.cartpole import CartPoleEnv
 # Seed
 START_SEED = 1
 
+# Eval Starting State
+EVAL_STATE = [1, 0, np.pi, 0]
+
 
 # reset bounds
 def get_reset_bounds(env):
     b = 0.2
-    low = [-b, -b, -np.pi + b, -b]
-    high = [b, b, np.pi - b, b]
+    low = [-b, -b, -np.pi - b, -b]
+    high = [b, b, -np.pi + b, b]
     return low, high
 
 
@@ -38,15 +41,20 @@ def get_reward(env: CartPoleEnv):
 
     Eopt = env.masspole * env.gravity * env.length
 
-    reward = 1 / (1 + (E - Eopt) ** 2)
+    reward = -((E - Eopt) ** 2)
 
-    if np.abs(theta) < 0.1:
-        reward += 100
+    if np.abs(u.project_to_interval(theta)) < 0.1:
+        reward += 10
+
+    if np.abs(x) > env.x_threshold - 0.5:
+        reward -= 100
 
     return reward, terminated, truncated, info
 
 
 ### -------------------------------------------- ###
 """Comment Block
-energy based approach
+negative energy
++ rew on top
+- rew near bounds
 """

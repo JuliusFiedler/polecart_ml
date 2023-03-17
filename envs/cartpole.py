@@ -500,7 +500,10 @@ class CartPoleContinous2Env(CartPoleEnv):
             l = self.length
             m1 = self.masscart
             m2 = self.masspole
-            u1 = force
+            try:
+                u1 = force[0]
+            except IndexError:
+                u1 = force
             dx1_dt = x3
             dx2_dt = x4
             dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (

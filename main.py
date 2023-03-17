@@ -24,7 +24,8 @@ model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transit
 ### --- Mode --- ###
 # mode = "train"
 # mode = "retrain"
-mode = "play"
+# mode = "play"
+mode = "eval"
 # mode = "cooperative"
 # mode = "manual"
 # mode = "state_feedback"
@@ -36,8 +37,8 @@ mode = "play"
 
 
 ### --- Environment --- ###
-env = CartPoleContinousSwingupEnv()
-# env = CartPoleContinous2Env()
+# env = CartPoleContinousSwingupEnv()
+env = CartPoleContinous2Env()
 env2 = CartPoleContinous2Env()
 # env = CartPoleTransitionDiscreteEnv()
 # env = CartPoleTransitionContinous2Env()
@@ -51,21 +52,29 @@ agent = PPOAgent(env)
 callback = CustomCallback()
 
 if mode == "train":
+    # env.render_mode = "human"
     print("Training")
     agent.train(total_timesteps=1e6, callback=callback)
 
 if mode == "retrain":
-    model_name = "CartPoleContinousSwingupEnv___2023_03_08__11_14_01"
+    # env.render_mode = "human"
+    model_name = "CartPoleContinous2Env___2023_03_06__15_13_56"
     assert agent.env.name in model_name, "wrong environment"
     agent.load_model(model_name)
     # agent.model.env = env
     print("continue Training")
     agent.train(1000000)
 
+elif mode == "eval":
+    print("Eval")
+    # env.render_mode = "human"
+    agent.load_model("CartPoleContinous2Env___2023_03_16__11_03_00_good")
+    agent.eval()
+
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinousSwingupEnv___2023_03_09__16_52_33")
+    agent.load_model("CartPoleContinous2Env___2023_03_16__11_03_00_good")
     agent.play(10)
 
 elif mode == "cooperative":
