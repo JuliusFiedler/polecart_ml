@@ -14,22 +14,25 @@ from util import *
 
 
 class PPOAgent:
-    def __init__(self, env) -> None:
+    def __init__(self, env, *args, **kwargs) -> None:
         self.env = env
         self.seed = env.c.START_SEED
         self.model = None
         self.tensorboard_log = None
+        self.ppo_kwargs = kwargs
 
     def create_model(self):
-        self.model = PPO("MlpPolicy", self.env, verbose=1, seed=self.seed, tensorboard_log=self.tensorboard_log)
+        self.model = PPO(
+            "MlpPolicy", self.env, verbose=1, seed=self.seed, tensorboard_log=self.tensorboard_log, **self.ppo_kwargs
+        )
 
     def train(self, total_timesteps=300000, callback=None, save_model=True):
         self.env.training = True
         # Create Folders and setup logs
         if save_model:
             t = dt.datetime.now().strftime("_%Y_%m_%d__%H_%M_%S")
-            name = self.env.name + "__" + t
-            self.folder_path = os.path.join(ROOT_PATH, "models", name)
+            self.model_name = self.env.name + "__" + t
+            self.folder_path = os.path.join(ROOT_PATH, "models", self.model_name)
             os.makedirs(self.folder_path)
 
             self.env = Monitor(self.env, filename=self.folder_path)
@@ -73,19 +76,15 @@ class PPOAgent:
         print(f"Model saved at {model_path}")
         # save metadata
         try:
-            # para_file_path = self.env.c.__file__
-            # para_file = None
-            # with open(para_file_path, "r") as f:
-            #     para_file = f.read()
             metadata_path = os.path.join(self.folder_path, "metadata.txt")
             with open(metadata_path, "a") as f:
-                # f.write(para_file)
                 f.writelines(
                     [
                         "\n",
                         f"\nTotal Training Steps: {self.env.total_step_count}",
                         f"\nTotal Episode Count: {self.env.episode_count}",
                         f"\nTraining Duration: {self.training_time}",
+                        f"\nNet Arch: {self.model.policy.net_arch}",
                     ]
                 )
         except Exception as e:
@@ -120,17 +119,36 @@ class PPOAgent:
     def eval(self):
         xs = []
         phis = []
-        for i in range(3):
+        inside_tol = []
+        episodes = 3
+        steps = 1000
+        for i in range(episodes):
             obs, _ = self.env.reset(state=np.array(self.env.c.EVAL_STATE) / (i + 2))
-            for j in range(1000):
+            for j in range(steps):
                 xs.append(obs[0])
                 phis.append(obs[2])
                 action, _ = self.model.predict(obs, deterministic=True)
                 obs, reward, done, trunc, info = self.env.step(action)
                 if done:
                     break
+
+        phis.reverse()
+        xs.reverse()
+        phi_tolerance = 0.01
+        x_tolerance = 0.05
+        for i in range(episodes):
+            for j, phi in enumerate(phis[i * 1000 : (i + 1) * 1000]):
+                if np.abs(phi) > phi_tolerance or np.abs(xs[steps * i + j]) > x_tolerance:
+                    inside_tol.append((episodes - i) * steps - j)
+                    break
+        phis.reverse()
+        xs.reverse()
+
+        tol_lines = [-phi_tolerance, phi_tolerance, -x_tolerance, x_tolerance]
+        plt.hlines(tol_lines, xmin=0, xmax=steps * episodes, colors="gray", linewidth=0.5)
         plt.plot(np.arange(len(xs)), xs, label=r"$x$")
         plt.plot(np.arange(len(phis)), phis, label=r"$\varphi$")
+        plt.vlines(inside_tol, ymin=min(phis), ymax=max(phis), colors="red")
         plt.legend()
         plt.title("Evaluation Episodes")
         path = os.path.join("models", self.model_name, "eval.pdf")
@@ -141,4 +159,5 @@ class PPOAgent:
 
         with open(os.path.join("models", self.model_name, "eval.txt"), "w") as f:
             f.write(f"mean phi: {round(mean_phi, 4)}\n")
-            f.write(f"mean x: {round(mean_x, 4)}")
+            f.write(f"mean x: {round(mean_x, 4)}\n")
+            f.write(f"mean steps until steady state: {round(np.mean(inside_tol) - steps, 4)}\n")

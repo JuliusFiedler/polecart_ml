@@ -21,6 +21,7 @@ class FeedbackAgent:
 class FeedforwardAgent:
     def __init__(self, env, path):
         self.env = env
+        self.model_name = f"FFA__{os.path.split(path)[1].split('.')[0]}"
 
         if os.path.isabs(path):
             self.path = path
@@ -44,7 +45,7 @@ class FeedforwardAgent:
             util.yellow(f"WARNING: Feedforward Controller at end of trajectory. Output will be 0 from now on.")
             self.trajectory_end = True
         self.counter += 1
-        return a
+        return np.array([a], dtype=float)
 
     def reset_trajectory(self):
         self.counter = 0

@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
 import csv
+from ipydex import IPS, activate_ips_on_exception
 
 from envs.cartpole import CartPoleDiscreteEnv, CartPoleContinous2Env, CartPoleContinousSwingupEnv
 from envs.cartpole_transition import (
@@ -10,12 +11,13 @@ from envs.cartpole_transition import (
     CartPoleTransitionContinousEnv,
     CartPoleTransitionContinous2Env,
 )
-from CrossEntropyLearning.cartpoleAgent1_gymnasium import Agent
 from ppo.ppo_agent import PPOAgent
 from manual.roly_poly import RolyPolyAgent
 from classical.classical_control import *
 import util
 from callbacks.callback import *
+
+activate_ips_on_exception()
 
 np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
@@ -45,7 +47,8 @@ env2 = CartPoleContinous2Env()
 
 ### --- Agent --- ###
 # agent = Agent(env)
-agent = PPOAgent(env)
+agent = PPOAgent(env, policy_kwargs={"net_arch": {"pi": [32, 32], "vf": [32, 32]}})
+# agent = PPOAgent(env)
 # agent = ManualAgent(env)
 
 ### --- Callback --- ###
@@ -54,7 +57,7 @@ callback = CustomCallback()
 if mode == "train":
     # env.render_mode = "human"
     print("Training")
-    agent.train(total_timesteps=1e6, callback=callback)
+    agent.train(total_timesteps=3e5, callback=callback)
 
 if mode == "retrain":
     # env.render_mode = "human"
@@ -68,13 +71,13 @@ if mode == "retrain":
 elif mode == "eval":
     print("Eval")
     # env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_03_16__11_03_00_good")
+    agent.load_model("CartPoleContinous2Env___2023_03_20__15_26_22")
     agent.eval()
 
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_03_16__11_03_00_good")
+    agent.load_model("CartPoleContinous2Env___2023_03_20__15_20_19")
     agent.play(10)
 
 elif mode == "cooperative":

@@ -187,6 +187,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     def step(self, action):
         self.ep_step_count += 1
         self.total_step_count += 1
+        if not self.action_space.contains(action):
+            action = np.array([action], dtype=float)
         self.action = action
         err_msg = f"{action!r} ({type(action)}) invalid"
         assert self.action_space.contains(action), err_msg
@@ -553,7 +555,10 @@ class CartPoleContinousSwingupEnv(CartPoleEnv):
             l = self.length
             m1 = self.masscart
             m2 = self.masspole
-            u1 = force
+            try:
+                u1 = force[0]
+            except IndexError:
+                u1 = force
             dx1_dt = x3
             dx2_dt = x4
             dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
