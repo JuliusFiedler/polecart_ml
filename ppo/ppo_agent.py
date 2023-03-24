@@ -120,6 +120,7 @@ class PPOAgent:
         xs = []
         phis = []
         inside_tol = []
+        total_cost = 0
         episodes = 3
         steps = 1000
         for i in range(episodes):
@@ -129,13 +130,15 @@ class PPOAgent:
                 phis.append(obs[2])
                 action, _ = self.model.predict(obs, deterministic=True)
                 obs, reward, done, trunc, info = self.env.step(action)
+                # add cost
+                total_cost += (obs.T @ self.env.c.Q @ obs + action.T * self.env.c.R * action)[0]
                 if done:
                     break
 
         phis.reverse()
         xs.reverse()
-        phi_tolerance = 0.01
-        x_tolerance = 0.05
+        phi_tolerance = self.env.c.phi_tolerance
+        x_tolerance = self.env.c.x_tolerance
         for i in range(episodes):
             for j, phi in enumerate(phis[i * 1000 : (i + 1) * 1000]):
                 if np.abs(phi) > phi_tolerance or np.abs(xs[steps * i + j]) > x_tolerance:
@@ -154,10 +157,7 @@ class PPOAgent:
         path = os.path.join("models", self.model_name, "eval.pdf")
         plt.savefig(path, format="pdf")
 
-        mean_phi = np.mean(phis)
-        mean_x = np.mean(xs)
-
         with open(os.path.join("models", self.model_name, "eval.txt"), "w") as f:
-            f.write(f"mean phi: {round(mean_phi, 4)}\n")
-            f.write(f"mean x: {round(mean_x, 4)}\n")
+            f.write(f"total cost: {round(total_cost, 4)}\n")
+            f.write(f"av cost per step: {round(total_cost / (episodes*steps), 4)}\n")
             f.write(f"mean steps until steady state: {round(np.mean(inside_tol) - steps, 4)}\n")

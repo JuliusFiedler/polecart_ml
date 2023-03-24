@@ -11,7 +11,7 @@ from util import *
 
 activate_ips_on_exception()
 
-model_name = "CartPoleContinousSwingupEnv___2023_03_16__10_46_05"
+model_name = "CartPoleContinous2Env___2023_03_16__11_03_00_good"
 
 path = os.path.join(ROOT_PATH, "models", model_name, "parameter_log.pickle")
 
@@ -68,12 +68,14 @@ def visualize_layer(layer, offset_l, offset_t, base_color):
 
         # assume all weights are in [-1, 1]
         assert np.abs(p) <= 2, "rethink color scaling!"
-        v = 4
+        v = 3
         if v == 1:
+            desc = "1 color per layer, brighter means >0, darker means <0"
             color_value = int((1 + p / 2) * 255 / 2)
             color = [0, 0, 0]
             color[base_color] = color_value
         elif v == 2:
+            desc = "black = -2, white = 2, continous scaling inbetween"
             color_value = int((p / 2 + 1) / 2 * 3 * 255)
             if color_value <= 255:
                 color = [color_value, 0, 0]
@@ -82,12 +84,14 @@ def visualize_layer(layer, offset_l, offset_t, base_color):
             else:
                 color = [255, 255, color_value - 2 * 255]
         elif v == 3:
+            desc = "red means <0, green means >0, dark = 0, bright = high"
             color_value = int(np.abs(p) / 2 * 255)
             if p <= 0:
                 color = [color_value, 0, 0]
             else:
                 color = [0, color_value, 0]
         elif v == 4:
+            desc = "absolute values, black = 0, brighter = higher"
             color_value = int(np.abs(p / 2) * 3 * 255)
             if color_value <= 255:
                 color = [color_value, 0, 0]
@@ -98,6 +102,7 @@ def visualize_layer(layer, offset_l, offset_t, base_color):
 
         assert all(np.array(color) <= 255)
         gfxdraw.filled_polygon(surf, coords, tuple(color))
+    text_to_screen(surf, desc, (300, 700))
 
 
 for i in range(len(data)):

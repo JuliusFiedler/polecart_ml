@@ -1,5 +1,8 @@
 # general
 # -------
+models/*
+notes/*
+figures/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -8,6 +8,11 @@ START_SEED = 1
 
 # Eval Starting State
 EVAL_STATE = [1, 0, np.pi / 180 * 10, 0]
+# Cost function for evaluation
+Q = np.diag([1000, 1000, 1000, 1000])
+R = 1
+x_tolerance = 0.05
+phi_tolerance = 0.01
 
 
 # reset bounds
