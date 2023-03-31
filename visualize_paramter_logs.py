@@ -11,16 +11,36 @@ from util import *
 
 activate_ips_on_exception()
 
-model_name = "CartPoleContinous2Env___2023_03_29__15_49_42"
+model_name = "CartPoleContinous2Env___2023_03_16__11_03_00_good"
 
 path = os.path.join(ROOT_PATH, "models", model_name, "parameter_log.pickle")
 
 with open(path, "rb") as f:
     data = pickle.load(f)
 
+
+pygame.init()
+
+# display
+os.environ["SDL_VIDEO_WINDOW_POS"] = f"{1920},{25}"
+pygame.display.set_caption("Parameter Visualization")
+screen_width = 1920
+screen_height = 1175
+game_display = pygame.display.set_mode((screen_width, screen_height))
+
+# init stuff
+clock = pygame.time.Clock()
+plot_button = None
+evolution_button = None
+nodes_button = None
+backwards_button = None
+back_button = None
+slider_1 = None
+
 keys = list(data[0]["policy"].keys())
 if "log_std" in keys:
     keys.remove("log_std")
+
 max_value = 0
 data_dict = {}
 for k in keys:
@@ -33,6 +53,23 @@ for d in data:
         if max_value < m:
             max_value = m
 print("max abs parameter", max_value)
+# max_value = 2
+action_net_dict = {}
+for i, key in enumerate(keys):
+    if f"policy_net" in key and "weight" in key:
+        layer = int(int(key.split(".")[2]) / 2)
+        action_net_dict[layer] = {
+            "w": data_dict[f"mlp_extractor.policy_net.{2 * layer}.weight"][-1],
+            "b": data_dict[f"mlp_extractor.policy_net.{2 * layer}.bias"][-1],
+            "name": key,
+        }
+    elif "action_net" in key and "weight" in key:
+        layer = len(action_net_dict.keys())
+        action_net_dict[layer] = {
+            "w": data_dict[f"action_net.weight"][-1],
+            "b": data_dict[f"action_net.bias"][-1],
+            "name": key,
+        }
 
 num_updates = len(data_dict[keys[0]])
 # v_line = 1630208 / 5001216
@@ -44,39 +81,28 @@ if v_line is not None:
             print(at, k, p)
         for p in data_dict[k][-1]:
             print("end", k, p)
-
-fig, ax = plt.subplots(len(keys), 1)
-for idx, k in enumerate(keys):
-    t = np.arange(len(data_dict[k]))
-    y = np.array(data_dict[k])
-    if len(y.shape) == 3:
-        y = y[:,0,:]
-    assert len(y.shape) == 2
-    for i in range(y.shape[1]):
-        ax[idx].plot(t, y[:,i], label=i)
-        ax[idx].set_title(k)
-        ax[idx].legend()
-        if v_line is not None:
-            ax[idx].vlines([v_line*y.shape[0]], min(y[:,i]), max(y[:,i]), color="k")
-plt.show()
+block_size = (10, 10)
 
 
-    
+def plot_parameters():
+    pygame.quit()
+    fig, ax = plt.subplots(len(keys), 1)
+    for idx, k in enumerate(keys):
+        t = np.arange(len(data_dict[k]))
+        y = np.array(data_dict[k])
+        if len(y.shape) == 3:
+            y = y[:, 0, :]
+        assert len(y.shape) == 2
+        for i in range(y.shape[1]):
+            ax[idx].plot(t, y[:, i], label=i)
+            ax[idx].set_title(k)
+            ax[idx].legend()
+            if v_line is not None:
+                ax[idx].vlines([v_line * y.shape[0]], min(y[:, i]), max(y[:, i]), color="k")
+    plt.show()
 
-pygame.init()
 
-# display
-os.environ["SDL_VIDEO_WINDOW_POS"] = f"{2000},{400}"
-pygame.display.set_caption("Parameter Visualization")
-screen_width = 1000
-screen_height = 800
-game_display = pygame.display.set_mode((screen_width, screen_height))
-
-# init stuff
-clock = pygame.time.Clock()
-
-
-def visualize_layer(layer, offset_l, offset_t, base_color, max_value):
+def visualize_layer(surf, layer, offset_l, offset_t, base_color, max_value):
     desc = ""
     for i, p in np.ndenumerate(layer):
         if len(i) == 2:
@@ -128,33 +154,232 @@ def visualize_layer(layer, offset_l, offset_t, base_color, max_value):
     text_to_screen(surf, desc, (300, 700))
 
 
-for i in range(len(data)):
+def parameter_evolution():
+    for i in range(len(data)):
+        surf = pygame.Surface((screen_width, screen_height))
+        surf.fill((255, 255, 255))
+
+        text_to_screen(surf, f"Update Step {i}", (screen_width - 70, 30))
+        offset_l = 10
+        offset_t = 10
+
+        # for k, layer_list in enumerate(all_data):
+        for k, layer_list in enumerate(data_dict.values()):
+            if len(layer_list[i].shape) == 2:
+                if layer_list[i].shape[0] < layer_list[i].shape[1]:
+                    layer_list[i] = layer_list[i].T
+            visualize_layer(surf, layer_list[i], offset_l, offset_t, k % 3, max_value)
+            text_to_screen(surf, keys[k], (offset_l + 5, 770), fontsize=12, rotation=90)
+            if len(layer_list[i].shape) == 2:
+                off_l = layer_list[i].shape[1] * block_size[0]
+            else:
+                off_l = block_size[0]
+            offset_l += off_l + 2
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+        game_display.blit(surf, (0, 0))
+        clock.tick(50)
+        pygame.display.update()
+    IPS()
+
+
+def get_color(value, min_v, max_v):
+    v = 1
+    if v == 0:
+        scaled_v = value / (max_v - min_v) * 255
+    elif v == 1:
+        scaled_v = np.abs(value) / max(np.abs([min_v, max_v])) * 255
+
+    color = (scaled_v, 0, 0)
+    return color
+
+
+def visualize_nodes():
     surf = pygame.Surface((screen_width, screen_height))
-    surf.fill((255, 255, 255))
+    num_inputs = 4
+    sliders = [None for i in range(num_inputs)]
+    back_button = None
+    done = False
+    while not done:
+        surf.fill((255, 255, 255))
+        nodes = {}
+        k = 0
+        r = 7
+        offset_l = 50
+        offset_t = 10
 
-    text_to_screen(surf, repr(keys), (300, 720))
-    text_to_screen(surf, f"Update Step {i}", (screen_width - 70, 30))
-    block_size = (10, 10)
-    offset_l = 10
-    offset_t = 10
+        # Buttons and Sliders
+        def back():
+            global done
+            done = True
 
-    # for k, layer_list in enumerate(all_data):
-    for k, layer_list in enumerate(data_dict.values()):
-        if len(layer_list[i].shape) == 2:
-            if layer_list[i].shape[0] < layer_list[i].shape[1]:
-                layer_list[i] = layer_list[i].T
-        visualize_layer(layer_list[i], offset_l, offset_t, k % 3, max_value)
-        if len(layer_list[i].shape) == 2:
-            off_l = layer_list[i].shape[1] * block_size[0]
-        else:
-            off_l = block_size[0]
-        offset_l += off_l + 2
+        if back_button is None:
+            back_button = Button(game_display, 1800, 1100, 50, 20, red, blue, "Back", action=back)
+        eventlist = pg.event.get()
+        obs = np.zeros(num_inputs)
+        for i in range(num_inputs):
+            if sliders[i] is None:
+                sliders[i] = Slider(surf, 20, offset_t + 10 + i * screen_height / num_inputs, value=0)
+            sliders[i].update(eventlist)
+            sliders[i].show()
+            obs[i] = sliders[i].value
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        layer_values = obs
+        layer_values_dict = {}
+        layer_values_dict[0] = layer_values
+        for i, key in enumerate(action_net_dict.keys()):
+            layer_values = action_net_dict[key]["w"] @ layer_values + action_net_dict[key]["b"]
+            layer_values_dict[i + 1] = layer_values
+
+        # input layer
+        nodes[k] = []
+        for i in range(num_inputs):
+            value = layer_values_dict[k][i]
+            color = get_color(value, min(layer_values_dict[k]), max(layer_values_dict[k]))
+            n = Node(surf, offset_l, offset_t, r, value=value, color=color)
+            n.show()
+            nodes[k].append(n)
+            # inputs.append(InputBox(surf, 50, offset_t + 40, 50, default=0.1))
+            offset_t += (screen_height - 20) / num_inputs
+        k += 1
+        offset_l += 600
+        # all other layers
+        for key in data_dict.keys():
+            offset_t = 10
+            if ("mlp_extractor.policy_net" in key or "action_net" in key) and "bias" in key:
+                nodes[k] = []
+                num_nodes = len(data_dict[key][-1])
+                for i in range(num_nodes):
+                    value = layer_values_dict[k][i]
+                    color = get_color(value, min(layer_values_dict[k]), max(layer_values_dict[k]))
+                    n = Node(surf, offset_l, offset_t, r, value=value, color=color)
+                    if n.color[0] > 255 / 2:
+                        n.show()
+                    nodes[k].append(n)
+                    offset_t += (screen_height - 20) / num_nodes
+                k += 1
+                offset_l += 600
+
+        # for key in list(nodes.keys())[:-1]:
+        #     for s in nodes[key]:
+        #         for e in nodes[key+1]:
+        #             Connection(surf, s, e, color=(200, 200, 200))#.show()
+
+        pg.event.get()
+
+        game_display.blit(surf, (0, 0))
+        back_button.show()
+        clock.tick(50)
+        pygame.display.update()
+
+
+def visualize_backwards():
+    surf = pygame.Surface((screen_width, screen_height))
+    num_inputs = 4
+    sliders = [None for i in range(num_inputs)]
+    back_button = None
+    done = False
+    while not done:
+        surf.fill((255, 255, 255))
+        nodes = {}
+        k = 0
+        r = 7
+        offset_l = 50
+        offset_t = 10
+
+        # Buttons and Sliders
+        def back():
+            global done
+            done = True
+
+        if back_button is None:
+            back_button = Button(game_display, 1800, 1100, 50, 20, red, blue, "Back", action=back)
+        eventlist = pg.event.get()
+        obs = np.zeros(num_inputs)
+        for i in range(num_inputs):
+            if sliders[i] is None:
+                sliders[i] = Slider(surf, 20, offset_t + 10 + i * screen_height / num_inputs, value=0)
+            sliders[i].update(eventlist)
+            sliders[i].show()
+            obs[i] = sliders[i].value
+
+        layer_values = obs
+        layer_values_dict = {}
+        layer_values_dict[0] = layer_values
+        for i, key in enumerate(action_net_dict.keys()):
+            layer_values = action_net_dict[key]["w"] @ layer_values + action_net_dict[key]["b"]
+            layer_values_dict[i + 1] = layer_values
+
+        # input layer
+        nodes[k] = []
+        for i in range(num_inputs):
+            value = layer_values_dict[k][i]
+            color = get_color(value, min(layer_values_dict[k]), max(layer_values_dict[k]))
+            n = Node(surf, offset_l, offset_t, r, value=value, color=color)
+            n.show()
+            nodes[k].append(n)
+            # inputs.append(InputBox(surf, 50, offset_t + 40, 50, default=0.1))
+            offset_t += (screen_height - 20) / num_inputs
+        k += 1
+        offset_l += 600
+        # all other layers
+        for key in data_dict.keys():
+            offset_t = 10
+            if ("mlp_extractor.policy_net" in key or "action_net" in key) and "bias" in key:
+                nodes[k] = []
+                num_nodes = len(data_dict[key][-1])
+                for i in range(num_nodes):
+                    value = layer_values_dict[k][i]
+                    index = np.argmax(np.abs(layer_values_dict[k]))
+                    color = get_color(value, min(layer_values_dict[k]), max(layer_values_dict[k]))
+                    n = Node(surf, offset_l, offset_t, r, value=value, color=color)
+                    if n.color[0] > 255 * 0.9:
+                        n.show()
+                    nodes[k].append(n)
+                    offset_t += (screen_height - 20) / num_nodes
+                k += 1
+                offset_l += 600
+
+        # for key in list(nodes.keys())[:-1]:
+        #     for s in nodes[key]:
+        #         for e in nodes[key+1]:
+        #             Connection(surf, s, e, color=(200, 200, 200))#.show()
+
+        pg.event.get()
+
+        game_display.blit(surf, (0, 0))
+        back_button.show()
+        clock.tick(50)
+        pygame.display.update()
+
+
+done = False
+while not done:
+    game_display.fill((255, 255, 255))
+    if plot_button is None:
+        plot_button = Button(game_display, 50, 50, 250, 20, red, light_red, "Plot Parameters", action=plot_parameters)
+    plot_button.show()
+    if evolution_button is None:
+        evolution_button = Button(
+            game_display, 50, 80, 250, 20, red, light_red, "Parameter Evolution", action=parameter_evolution
+        )
+    evolution_button.show()
+    if nodes_button is None:
+        nodes_button = Button(game_display, 50, 110, 250, 20, red, light_red, "Visualize Nodes", action=visualize_nodes)
+    nodes_button.show()
+    if backwards_button is None:
+        backwards_button = Button(
+            game_display, 50, 140, 250, 20, red, light_red, "Visualize Backwards", action=visualize_backwards
+        )
+    backwards_button.show()
+
+    for ev in pygame.event.get():
+        if ev.type == pygame.QUIT:
+            IPS()
             pygame.quit()
-    game_display.blit(surf, (0, 0))
+            done = True
+
     clock.tick(50)
     pygame.display.update()
-
-IPS()

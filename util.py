@@ -7,6 +7,9 @@ import datetime
 ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 
 white = (255, 255, 255)
+grey_1 = (200, 200, 200)
+grey_2 = (100, 100, 100)
+white = (255, 255, 255)
 black = (0, 0, 0)
 green = (0, 255, 0)
 blue = (0, 0, 200)
@@ -32,15 +35,18 @@ def yellow(txt):
     return f"{Fore.YELLOW}{txt}{Style.RESET_ALL}"
 
 
-def text_to_screen(surf, text, pos, font=None, fontsize=16, color=None):
+def text_to_screen(surf, text, pos, font=None, fontsize=16, color=None, rotation=0, return_rect=False):
     if font is None:
         font = pg.font.Font("freesansbold.ttf", fontsize)
     if color is None:
         color = black
     obj = font.render(text, True, color, white)
+    obj = pg.transform.rotate(obj, rotation)
     obj_rect = obj.get_rect()
     obj_rect.center = (int(pos[0]), int(pos[1]))
     surf.blit(obj, obj_rect)
+    if return_rect:
+        return obj_rect
 
 
 def text_objects(msg, font, text_color=black):
@@ -105,6 +111,75 @@ class Button:
         text_surface, text_rect = text_objects(self.text, self.font, self.text_color)
         text_rect.center = (button_pos[0] + button_size[0] / 2, button_pos[1] + button_size[1] / 2)
         self.disp.blit(text_surface, text_rect)
+
+
+class Slider:
+    def __init__(self, disp, x, y, w=50, h=20, value=0, value_range=[-1, 1]) -> None:
+        self.disp = disp
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.value = value
+        self.value_range = value_range
+        self.rect = pg.Rect(self.x, self.y, self.w, self.h)
+        self.zero_button = Button(
+            self.disp, self.x, self.y + self.h + 2, self.w, self.h, grey_2, grey_1, "zero", action=self.zero
+        )
+
+    def show(self):
+        pg.draw.rect(self.disp, black, self.rect, width=2)
+        pos = (
+            self.x + self.value / (self.value_range[-1] - self.value_range[0]) * self.w + self.w / 2,
+            self.y + self.h / 2,
+        )
+        pg.draw.circle(self.disp, color=blue, center=pos, radius=5)
+        self.zero_button.show()
+
+    def update(self, event_list):
+        for event in event_list:
+            if event.type == pg.MOUSEBUTTONDOWN:
+                mouse_pos = pg.mouse.get_pos()
+                if self.rect.collidepoint(mouse_pos):
+                    self.value = ((mouse_pos[0] - self.x) / self.w - 0.5) * (self.value_range[-1] - self.value_range[0])
+
+    def zero(self):
+        self.value = 0
+
+
+class Node:
+    def __init__(self, disp, x, y, r, value=0, color=black):
+        self.disp = disp
+        self.x = x
+        self.y = y
+        self.r = r
+        self.color = color
+        self.value = value
+
+    def show(self):
+        try:
+            pg.draw.circle(self.disp, self.color, (self.x, self.y), self.r)
+        except ValueError:
+            pg.draw.circle(self.disp, black, (self.x, self.y), self.r)
+
+
+class Connection:
+    def __init__(self, surf, start, end, color=black) -> None:
+        self.surf = surf
+        self.start = start
+        self.end = end
+        self.color = color
+
+    def show(self):
+        if isinstance(self.start, (tuple, list, np.ndarray)):
+            start = tuple(self.start)
+        elif isinstance(self.start, Node):
+            start = (self.start.x, self.start.y)
+        if isinstance(self.end, (tuple, list, np.ndarray)):
+            end = tuple(self.end)
+        elif isinstance(self.end, Node):
+            end = (self.end.x, self.end.y)
+        pg.draw.line(self.surf, self.color, start_pos=start, end_pos=end)
 
 
 def project_to_interval(state, min=-np.pi, max=np.pi):
