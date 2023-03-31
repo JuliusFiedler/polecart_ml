@@ -20,11 +20,16 @@ class PPOAgent:
         self.model = None
         self.tensorboard_log = None
         self.ppo_kwargs = kwargs
+        self.action_net_kwargs = None
 
     def create_model(self):
         self.model = PPO(
             "MlpPolicy", self.env, verbose=1, seed=self.seed, tensorboard_log=self.tensorboard_log, **self.ppo_kwargs
         )
+        if self.action_net_kwargs:
+            if "bias" in self.action_net_kwargs.keys():
+                self.model.policy.action_net.bias = self.action_net_kwargs["bias"]
+                self.model.policy.action_net.weight.data = self.action_net_kwargs["weight"]
 
     def train(self, total_timesteps=300000, callback=None, save_model=True):
         self.env.training = True
@@ -111,7 +116,7 @@ class PPOAgent:
             obs, _ = self.env.reset()
             r_sum = 0
             while not done and not trunc:
-                action, _states = self.model.predict(obs, deterministic=True)
+                action, _ = self.model.predict(obs, deterministic=True)
                 obs, reward, done, trunc, info = self.env.step(action)
                 r_sum += reward
             print("Reward Ep ", i, r_sum)

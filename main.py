@@ -16,6 +16,7 @@ from manual.roly_poly import RolyPolyAgent
 from classical.classical_control import *
 import util
 from callbacks.callback import *
+import torch as th
 
 activate_ips_on_exception()
 
@@ -24,10 +25,10 @@ folder_path = os.path.abspath(os.path.dirname(__file__))
 model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transition_crossentropy.h5")
 
 ### --- Mode --- ###
-# mode = "train"
+mode = "train"
 # mode = "retrain"
 # mode = "play"
-mode = "eval"
+# mode = "eval"
 # mode = "cooperative"
 # mode = "manual"
 # mode = "state_feedback"
@@ -46,9 +47,12 @@ env2 = CartPoleContinous2Env()
 # env = CartPoleTransitionContinous2Env()
 
 ### --- Agent --- ###
-# agent = Agent(env)
-agent = PPOAgent(env, policy_kwargs={"net_arch": {"pi": [32, 32], "vf": [32, 32]}})
-# agent = PPOAgent(env)
+# agent = PPOAgent(env, policy_kwargs={"net_arch": {'pi': [], 'vf': [64, 64]}})
+# agent.action_net_kwargs = {
+#     "bias": None,
+#     "weight": -th.tensor([[-25.62277, -45.25930, -240.50705, -70.60946]], requires_grad=True)
+#     }
+agent = PPOAgent(env)
 # agent = ManualAgent(env)
 
 ### --- Callback --- ###
@@ -61,23 +65,23 @@ if mode == "train":
 
 if mode == "retrain":
     # env.render_mode = "human"
-    model_name = "CartPoleContinous2Env___2023_03_06__15_13_56"
+    model_name = "CartPoleContinous2Env___2023_03_24__12_01_04"
     assert agent.env.name in model_name, "wrong environment"
     agent.load_model(model_name)
     # agent.model.env = env
     print("continue Training")
-    agent.train(1000000)
+    agent.train(4000000)
 
 elif mode == "eval":
     print("Eval")
     # env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_03_20__15_26_22")
+    agent.load_model("CartPoleContinous2Env___2023_03_16__11_03_00_good")
     agent.eval()
 
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_03_20__15_20_19")
+    agent.load_model("CartPoleContinous2Env___2023_03_28__17_31_21")
     agent.play(10)
 
 elif mode == "cooperative":
