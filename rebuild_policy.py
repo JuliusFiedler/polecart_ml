@@ -74,7 +74,10 @@ def linearize_NN(env, model):
     obs = np.ones(env.observation_space.shape) * 0.1
     model.predict(obs, deterministic=True)
     # this doesnt work if model clips action and NN does not, use sensible obs
-    assert sum(NN(obs) - model.predict(obs, deterministic=True)[0]) < 1e-4
+    assert (
+        sum(np.clip(NN(obs), env.action_space.low, env.action_space.high) - model.predict(obs, deterministic=True)[0])
+        < 1e-4
+    ), "linearization not accurate"
 
     # linearization of NN
 

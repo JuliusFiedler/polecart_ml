@@ -19,9 +19,10 @@ class CustomCallback(BaseCallback):
         # Create folder if needed
         if self.log_path is not None:
             os.makedirs(self.log_path, exist_ok=True)
-        self.parameter_file = os.path.join(self.log_path, "parameter_log.pickle")
+        self.parameter_file = os.path.join(self.log_path, "training_logs.p")
+        d = {"NN_updates": {"policy": {}, "linearization": [], "step": [], "episode": []}}
         with open(self.parameter_file, "wb") as f:
-            pickle.dump([], f)
+            pickle.dump(d, f)
 
     def _on_step(self):
         if self.n_calls % self.eval_freq == 0:
@@ -51,12 +52,20 @@ class CustomCallback(BaseCallback):
                     self.best_episode = [x[-1], y[-1]]
         return super()._on_step()
 
-    def on_rollout_start(self) -> None:
-        p = self.model.get_parameters()
+    def on_rollout_start(self):
+        p = self.model.get_parameters()["policy"]
         K = linearize_NN(self.training_env, self.model)
-        p["linearization"] = K
         with open(self.parameter_file, "rb") as f:
             p_log = pickle.load(f)
-        p_log.append(p)
+        for key in p.keys():
+            if key not in p_log["NN_updates"]["policy"].keys():
+                p_log["NN_updates"]["policy"][key] = []
+
+            p_log["NN_updates"]["policy"][key].append(p[key].detach().numpy())
+
+        p_log["NN_updates"]["step"].append(self.training_env.envs[0].env.total_step_count)
+        p_log["NN_updates"]["episode"].append(self.training_env.envs[0].env.episode_count)
+        p_log["NN_updates"]["linearization"].append(K)
+
         with open(self.parameter_file, "wb") as f:
             pickle.dump(p_log, f)

@@ -29,9 +29,9 @@ np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
 
 ### --- Mode --- ###
-# mode = "train"
+mode = "train"
 # mode = "retrain"
-mode = "play"
+# mode = "play"
 # mode = "eval"
 # mode = "cooperative"
 # mode = "manual"
@@ -45,8 +45,8 @@ mode = "play"
 
 ### --- Environment --- ###
 # env = CartPoleContinousSwingupEnv()
-env = CartPoleContinous5StateEnv()
-# env = CartPoleContinous2Env()
+# env = CartPoleContinous5StateEnv()
+env = CartPoleContinous2Env()
 env2 = CartPoleContinous2Env()
 # env = CartPoleTransitionDiscreteEnv()
 # env = CartPoleTransitionContinous2Env()
@@ -70,23 +70,23 @@ if mode == "train":
 
 if mode == "retrain":
     # env.render_mode = "human"
-    model_name = "CartPoleContinous2Env___2023_03_24__12_01_04"
+    model_name = "CartPoleContinous2Env___2023_04_04__15_22_29__max_tr_1000__trunc__best"
     assert agent.env.name in model_name, "wrong environment"
     agent.load_model(model_name)
     # agent.model.env = env
     print("continue Training")
-    agent.train(4000000)
+    agent.train(100000, callback=callback)
 
 elif mode == "eval":
     print("Eval")
     # env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_04_03__17_06_36")
+    agent.load_model("CartPoleContinous2Env___2023_04_04__16_54_21")
     agent.eval()
 
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous5StateEnv___2023_04_03__17_06_19")
+    agent.load_model("CartPoleContinous2Env___2023_04_04__16_54_21")
     agent.play(10)
 
 elif mode == "cooperative":
@@ -208,13 +208,13 @@ elif mode == "compare":
 
     ### --- Agents 1 --- ###
     agent1 = PPOAgent(env)
-    agent1.load_model("CartPoleContinous2Env___2023_03_06__15_13_56")
+    agent1.load_model("CartPoleContinous2Env___2023_04_04__11_25_46__best")
     # F = F_LQR_2["F"]
     # agent1 = FeedbackAgent(env, F)
 
     ### --- Agents 2 --- ###
     agent2 = PPOAgent(env2)
-    agent2.load_model("CartPoleContinous2Env___2023_03_07__15_35_12")
+    agent2.load_model("CartPoleContinous2Env___2023_04_04__11_10_59__x_off")
     # F = F_LQR_3["F"]
     # agent2 = FeedbackAgent(env2, F)
 

@@ -9,6 +9,7 @@ import datetime as dt
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.monitor import Monitor
+from classical.classical_control import F_LQR_2 as LQR_IDEAL
 from ipydex import IPS
 
 from util import *
@@ -82,10 +83,10 @@ class PPOAgent:
         print(f"Model saved at {model_path}")
         # save metadata
         try:
-            history_path = os.path.join(self.folder_path, "parameter_log.pcl")
+            history_path = os.path.join(self.folder_path, "training_logs.p")
             with open(history_path, "rb") as f:
                 paras = pickle.load(f)
-            paras["history"] = self.env.history
+            paras["training_history"] = self.env.history
             with open(history_path, "wb") as f:
                 pickle.dump(paras, f)
         except Exception as e:
@@ -182,12 +183,13 @@ class PPOAgent:
             f.write(f"av cost per step: {round(total_cost / (episodes*steps), 4)}\n")
             f.write(f"mean steps until steady state: {round(np.mean(inside_tol) - steps, 4)}\n")
 
-        path = os.path.join("models", self.model_name, "parameter_log.pickle")
+        # visualize training
+        path = os.path.join("models", self.model_name, "training_logs.p")
         if os.path.isfile(path):
             with open(path, "rb") as f:
-                h = pickle.load(f)
-            h = h["history"]
-            terminated_idxs = np.where(h["terminated"])[0]
+                log = pickle.load(f)
+            h = log["training_history"]
+            terminated_idxs = np.where(np.logical_or(h["terminated"], h["truncated"]))[0]
 
             assert len(terminated_idxs) == h["episode"][-1] - h["episode"][0]
 
@@ -200,16 +202,19 @@ class PPOAgent:
             plt.savefig(os.path.join("models", self.model_name, "step_data.pdf"), format="pdf")
             plt.clf()
 
-            # episode data
+            # episode data, reward, cost, length
             total_rews = []
             total_cost = []
             ep_length = []
+            rollout_length = []
             start = 0
             for i in range(len(terminated_idxs)):
                 end = terminated_idxs[i]
 
                 total_rews.append(sum(h["reward"][start:end]))
                 ep_length.append(end - start)
+                if i + 1 < len(log["NN_updates"]["episode"]):
+                    rollout_length.append(log["NN_updates"]["episode"][i + 1] - log["NN_updates"]["episode"][i])
                 cost = 0
                 for k in range(start, end, 1):
                     cost += (
@@ -223,15 +228,45 @@ class PPOAgent:
             fig, ax = plt.subplots(2, 2)
             ax[0, 0].plot(np.arange(2, h["episode"][-1], 1), total_rews)
             ax[0, 0].set_title("Total Reward")
+            ax[0, 0].grid()
+
+            ax[0, 1].plot(np.arange(2, h["episode"][-1], 1), ep_length, label="Episode Length")
+            ax[0, 1].set_title("Episode Length")
+            ax[0, 1].set_xlabel("Episode")
+            ax[0, 1].grid()
 
             ax[1, 0].plot(np.arange(2, h["episode"][-1], 1), total_cost)
             ax[1, 0].set_title("Total Cost")
             ax[1, 0].set_xlabel("Episode")
             ax[1, 0].sharex(ax[0, 0])
+            ax[1, 0].grid()
 
-            ax[0, 1].plot(np.arange(2, h["episode"][-1], 1), ep_length, label="Episode Length")
-            ax[0, 1].set_title("Episode Length")
-            ax[0, 1].set_xlabel("Episode")
+            ax[1, 1].plot(np.arange(len(rollout_length)), rollout_length, label="Rollout Length")
+            ax[1, 1].set_title("Rollout Length")
+            ax[1, 1].set_xlabel("Nr. Update")
+            ax[1, 1].grid()
+
             fig.tight_layout()
+            fig.suptitle(self.model_name)
+            fig.subplots_adjust(top=0.85)
             plt.savefig(os.path.join("models", self.model_name, "episode_data.pdf"), format="pdf")
             plt.clf()
+
+            # progression of linearized NN
+            colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
+            for i in range(len(log["NN_updates"]["linearization"][0])):
+                plt.plot(
+                    log["NN_updates"]["episode"],
+                    np.array(log["NN_updates"]["linearization"])[:, i],
+                    label=f"$K_{i+1}$",
+                    color=colors[i],
+                )
+                plt.scatter(log["NN_updates"]["episode"][-1], -LQR_IDEAL["F"][0, i], label=f"$LQR K_{i}$", c=colors[i])
+            plt.legend()
+            plt.xlabel("Episode")
+            plt.grid()
+            plt.title("Evolution of linearized NN")
+            plt.savefig(os.path.join("models", self.model_name, "linearization_log.pdf"), format="pdf")
+            plt.clf()
+
+            #

@@ -36,7 +36,7 @@ def get_reward(env: CartPoleEnv):
         or theta > env.theta_threshold_radians
     )
     if env.ep_step_count > 1000:
-        terminated = True
+        truncated = True
         print("reset after 1000 steps")
 
     # Q = np.diag([1000, 1000, 1000, 1000])
@@ -52,5 +52,5 @@ def get_reward(env: CartPoleEnv):
 
 ### -------------------------------------------- ###
 """
-standard approach, 1 per step - x**2
+reset after 1000 steps, but with truncated
 """

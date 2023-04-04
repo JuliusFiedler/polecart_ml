@@ -135,6 +135,9 @@ class Slider:
         )
         pg.draw.circle(self.disp, color=blue, center=pos, radius=5)
         self.zero_button.show()
+        text_to_screen(
+            self.disp, str(round(self.value, 3)), (self.x + self.w / 2, self.y + self.h * 2 + 4 + self.h / 2)
+        )
 
     def update(self, event_list):
         for event in event_list:

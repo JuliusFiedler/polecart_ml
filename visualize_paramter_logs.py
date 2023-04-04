@@ -11,12 +11,11 @@ from util import *
 
 activate_ips_on_exception()
 
-model_name = "CartPoleContinous2Env___2023_03_16__11_03_00_good"
+# model_name = "CartPoleContinous2Env___2023_03_16__11_03_00_good"
+model_name = "CartPoleContinous2Env___2023_04_04__15_22_29"
+model_name_compare = "CartPoleContinous2Env___2023_04_04__11_10_59__max_tr_1000__x_off"
 
-path = os.path.join(ROOT_PATH, "models", model_name, "parameter_log.pickle")
-
-with open(path, "rb") as f:
-    data = pickle.load(f)
+# path = os.path.join(ROOT_PATH, "models", model_name, "parameter_log.pickle")
 
 
 pygame.init()
@@ -30,30 +29,41 @@ game_display = pygame.display.set_mode((screen_width, screen_height))
 
 # init stuff
 clock = pygame.time.Clock()
-plot_button = None
+compare_button = None
 evolution_button = None
 nodes_button = None
 backwards_button = None
 back_button = None
 slider_1 = None
 
-keys = list(data[0]["policy"].keys())
-if "log_std" in keys:
-    keys.remove("log_std")
 
-max_value = 0
-data_dict = {}
-for k in keys:
-    data_dict[k] = []
-for d in data:
+def import_data(name):
+    path = os.path.join(ROOT_PATH, "models", name, "training_logs.p")
+
+    with open(path, "rb") as f:
+        logs = pickle.load(f)
+    data = logs["NN_updates"]
+
+    max_value = 0
+    data_dict = data["policy"]
+    keys = list(data["policy"].keys())
+    if "log_std" in keys:
+        keys.remove("log_std")
+        data_dict.pop("log_std")
+
+    # filter for biggest (abs) parameter for color scaling later
     for k in keys:
-        data_dict[k].append(d["policy"][k].detach().numpy())
-        # filter for biggest (abs) parameter for color scaling later
-        m = np.max(np.abs(d["policy"][k].detach().numpy()))
-        if max_value < m:
-            max_value = m
-print("max abs parameter", max_value)
-# max_value = 2
+        for entry in data_dict[k]:
+            m = np.max(np.abs(entry))
+            if max_value < m:
+                max_value = m
+    print("max abs parameter", max_value)
+    return keys, data_dict, max_value, logs
+
+
+keys, data_dict, max_value, logs = import_data(model_name)
+
+# action net of trained model
 action_net_dict = {}
 for i, key in enumerate(keys):
     if f"policy_net" in key and "weight" in key:
@@ -84,25 +94,7 @@ if v_line is not None:
 block_size = (10, 10)
 
 
-def plot_parameters():
-    pygame.quit()
-    fig, ax = plt.subplots(len(keys), 1)
-    for idx, k in enumerate(keys):
-        t = np.arange(len(data_dict[k]))
-        y = np.array(data_dict[k])
-        if len(y.shape) == 3:
-            y = y[:, 0, :]
-        assert len(y.shape) == 2
-        for i in range(y.shape[1]):
-            ax[idx].plot(t, y[:, i], label=i)
-            ax[idx].set_title(k)
-            ax[idx].legend()
-            if v_line is not None:
-                ax[idx].vlines([v_line * y.shape[0]], min(y[:, i]), max(y[:, i]), color="k")
-    plt.show()
-
-
-def visualize_layer(surf, layer, offset_l, offset_t, base_color, max_value):
+def visualize_layer(surf, layer, offset_l, offset_t, base_color, max_value, v=4):
     desc = ""
     for i, p in np.ndenumerate(layer):
         if len(i) == 2:
@@ -115,9 +107,9 @@ def visualize_layer(surf, layer, offset_l, offset_t, base_color, max_value):
         b = t + block_size[1]
         coords = [(l, b), (l, t), (r, t), (r, b)]
 
-        # assume all weights are in [-1, 1]
         assert np.abs(p) <= max_value, "rethink color scaling!"
-        v = 4
+        if max_value == 0:
+            max_value = 1
         if v == 1:
             desc = "1 color per layer, brighter means >0, darker means <0"
             color_value = int((1 + p / max_value) * 255 / 2)
@@ -155,7 +147,7 @@ def visualize_layer(surf, layer, offset_l, offset_t, base_color, max_value):
 
 
 def parameter_evolution():
-    for i in range(len(data)):
+    for i in range(num_updates):
         surf = pygame.Surface((screen_width, screen_height))
         surf.fill((255, 255, 255))
 
@@ -355,12 +347,69 @@ def visualize_backwards():
         pygame.display.update()
 
 
+def compare_parameters(idx=-1):
+    done = False
+    keys_2, data_dict_2, _, logs_2 = import_data(model_name_compare)
+    assert keys == keys_2, "comparison between differently structured NNs"
+    while not done:
+        if np.abs(idx) >= len(data_dict[keys[0]]):
+            idx = -1
+            print("max index", len(data_dict[keys[0]]))
+
+        comp_dict = {}
+        max_v = 0
+        for key in keys:
+            assert (
+                data_dict[key][idx].shape == data_dict_2[key][idx].shape
+            ), "comparison between differently structured NNs"
+            comp_dict[key] = data_dict[key][idx] - data_dict_2[key][idx]
+            m = np.max(np.abs(comp_dict[key]))
+            if max_v < m:
+                max_v = m
+        surf = pygame.Surface((screen_width, screen_height))
+        surf.fill((255, 255, 255))
+
+        offset_l = 10
+        offset_t = 10
+        text_to_screen(surf, f"Episode {logs['NN_updates']['episode'][idx]}", (100, 900))
+        text_to_screen(surf, f"Step {logs['NN_updates']['step'][idx]}", (100, 920))
+
+        for k, layer in enumerate(comp_dict.values()):
+            if len(layer.shape) == 2:
+                if layer.shape[0] < layer.shape[1]:
+                    layer = layer.T
+            visualize_layer(surf, layer, offset_l, offset_t, k % 3, max_v, v=3)
+            text_to_screen(surf, keys[k], (offset_l + 5, 770), fontsize=12, rotation=90)
+            if len(layer.shape) == 2:
+                off_l = layer.shape[1] * block_size[0]
+            else:
+                off_l = block_size[0]
+            offset_l += off_l + 2
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+        game_display.blit(surf, (0, 0))
+        clock.tick(50)
+        pygame.display.update()
+        inp = input("new index (int) or back [n]")
+        if inp == "n":
+            done = True
+        else:
+            try:
+                idx = int(inp)
+            except:
+                pass
+
+
 done = False
 while not done:
     game_display.fill((255, 255, 255))
-    if plot_button is None:
-        plot_button = Button(game_display, 50, 50, 250, 20, red, light_red, "Plot Parameters", action=plot_parameters)
-    plot_button.show()
+    if compare_button is None:
+        compare_button = Button(
+            game_display, 50, 50, 250, 20, red, light_red, "Compare Agents", action=compare_parameters
+        )
+    compare_button.show()
     if evolution_button is None:
         evolution_button = Button(
             game_display, 50, 80, 250, 20, red, light_red, "Parameter Evolution", action=parameter_evolution
