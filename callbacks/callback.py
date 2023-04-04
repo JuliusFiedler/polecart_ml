@@ -1,12 +1,18 @@
 import numpy as np
 import os
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.results_plotter import load_results, ts2xy
 import pickle
+
+from rebuild_policy import linearize_NN
 
 
 class CustomCallback(BaseCallback):
     def __init__(self, log_path=None, verbose: int = 0):
         self.log_path = log_path
+        self.eval_freq = 100_000
+        self.best_mean_reward = -np.inf
+        self.mean_rewards = []
         super().__init__(verbose)
 
     def _init_callback(self) -> None:
@@ -17,11 +23,38 @@ class CustomCallback(BaseCallback):
         with open(self.parameter_file, "wb") as f:
             pickle.dump([], f)
 
-    def _on_step(self) -> bool:
+    def _on_step(self):
+        if self.n_calls % self.eval_freq == 0:
+            # Retrieve training reward
+            x, y = ts2xy(load_results(self.log_path), "timesteps")
+            if len(x) > 0:
+                # Mean training reward over the last 100 episodes
+                mean_reward = np.mean(y[-100:])
+                self.mean_rewards.append(mean_reward)
+                if self.verbose > 0:
+                    print("Num timesteps: {}".format(self.num_timesteps))
+                    print(
+                        "Best mean reward: {:.2f} - Last mean reward per episode: {:.2f}".format(
+                            self.best_mean_reward, mean_reward
+                        )
+                    )
+
+                # New best model, you could save the agent here
+                if mean_reward > self.best_mean_reward:
+                    self.best_mean_reward = mean_reward
+                    # Example for saving best model
+                    if self.verbose > 0:
+                        print("Saving new best model to {}".format(self.log_path))
+                    self.model.save(
+                        os.path.join(self.log_path, "intermediate_models", f"best_model_{self.num_timesteps}.h5")
+                    )
+                    self.best_episode = [x[-1], y[-1]]
         return super()._on_step()
 
     def on_rollout_start(self) -> None:
         p = self.model.get_parameters()
+        K = linearize_NN(self.training_env, self.model)
+        p["linearization"] = K
         with open(self.parameter_file, "rb") as f:
             p_log = pickle.load(f)
         p_log.append(p)
