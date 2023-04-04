@@ -5,7 +5,12 @@ import gymnasium as gym
 import csv
 from ipydex import IPS, activate_ips_on_exception
 
-from envs.cartpole import CartPoleDiscreteEnv, CartPoleContinous2Env, CartPoleContinousSwingupEnv
+from envs.cartpole import (
+    CartPoleDiscreteEnv,
+    CartPoleContinous2Env,
+    CartPoleContinousSwingupEnv,
+    CartPoleContinous5StateEnv,
+)
 from envs.cartpole_transition import (
     CartPoleTransitionDiscreteEnv,
     CartPoleTransitionContinousEnv,
@@ -22,12 +27,11 @@ activate_ips_on_exception()
 
 np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
-model_path = os.path.join(folder_path, "CrossEntropyLearning", "cartpole_transition_crossentropy.h5")
 
 ### --- Mode --- ###
-mode = "train"
+# mode = "train"
 # mode = "retrain"
-# mode = "play"
+mode = "play"
 # mode = "eval"
 # mode = "cooperative"
 # mode = "manual"
@@ -41,7 +45,8 @@ mode = "train"
 
 ### --- Environment --- ###
 # env = CartPoleContinousSwingupEnv()
-env = CartPoleContinous2Env()
+env = CartPoleContinous5StateEnv()
+# env = CartPoleContinous2Env()
 env2 = CartPoleContinous2Env()
 # env = CartPoleTransitionDiscreteEnv()
 # env = CartPoleTransitionContinous2Env()
@@ -75,13 +80,13 @@ if mode == "retrain":
 elif mode == "eval":
     print("Eval")
     # env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_03_16__11_03_00_good")
+    agent.load_model("CartPoleContinous2Env___2023_04_03__17_06_36")
     agent.eval()
 
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_03_28__17_31_21")
+    agent.load_model("CartPoleContinous5StateEnv___2023_04_03__17_06_19")
     agent.play(10)
 
 elif mode == "cooperative":

@@ -98,6 +98,16 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.ep_step_count = 0
         self.total_step_count = 0
         self.training = False
+        self.history = {
+            "step": [],
+            "episode": [],
+            "state": [],
+            "action": [],
+            "reward": [],
+            "terminated": [],
+            "truncated": [],
+            "info": [],
+        }
 
         # physics
         self.gravity = 9.8
@@ -213,7 +223,22 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if self.request_reset:
             truncated = True
 
+        self.save_step_data(state, action, self.reward, terminated, truncated, info)
+
+        if hasattr(self, "post_processing_state"):
+            state = self.post_processing_state(state)
+
         return state, self.reward, terminated, truncated, info
+
+    def save_step_data(self, state, action, reward, terminated, truncated, info):
+        self.history["step"].append(self.total_step_count)
+        self.history["episode"].append(self.episode_count)
+        self.history["state"].append(state)
+        self.history["action"].append(action)
+        self.history["reward"].append(reward)
+        self.history["terminated"].append(terminated)
+        self.history["truncated"].append(truncated)
+        self.history["info"].append(info)
 
     def get_reward(self):
         x, x_dot, theta, theta_dot = self.state
@@ -260,7 +285,8 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         if state is None:
             # random state
             low, high = self.c.get_reset_bounds(self)
-            self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
+            # self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
+            self.state = self.np_random.uniform(low=low, high=high, size=np.array(low).shape)
         else:
             # fixed state
             self.state = state
@@ -274,7 +300,12 @@ class CartPoleEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         if self.render_mode == "human":
             self.render()
-        return np.array(self.state, dtype=np.float32), {}
+
+        s = self.state
+        if hasattr(self, "post_processing_state"):
+            s = self.post_processing_state(s)
+
+        return np.array(s, dtype=np.float32), {}
 
     def render(self):
         if self.render_mode is None:
@@ -530,6 +561,78 @@ class CartPoleContinous2Env(CartPoleEnv):
         return self.c.get_reward(self)
 
 
+class CartPoleContinous5StateEnv(CartPoleEnv):
+    """same as Continuous Env 2 but with cos(phi), sin(phi) instead of phi in state representation
+    only change output of step, which is what the agent sees, internal state as before S\in\R^4"""
+
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.action_space = spaces.Box(-10, 10, (1,), float)
+        high = np.array(
+            [
+                self.x_threshold * 2,  # x
+                np.finfo(np.float32).max,  # xdot
+                1,  # cos phi
+                1,  # sin phi
+                np.finfo(np.float32).max,  # phidot
+            ],
+            dtype=np.float32,
+        )
+        self.observation_space = spaces.Box(-high, high, dtype=np.float32)
+
+        import envs.parameter.CartPoleContinous5StateEnv as c
+
+        self.c = c
+        self.seed = c.START_SEED
+
+    def get_force(self, action):
+        return action
+
+    def calc_new_state(self, action):
+        x, x_dot, theta, theta_dot = self.state
+        force = self.get_force(action)
+
+        # based on mathematical pendulum
+
+        def rhs(t, state):
+            x, x_dot, theta, theta_dot = state
+            x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
+            g = self.gravity
+            l = self.length
+            m1 = self.masscart
+            m2 = self.masspole
+            try:
+                u1 = force[0]
+            except IndexError:
+                u1 = force
+            dx1_dt = x3
+            dx2_dt = x4
+            dx3_dt = (-g * m2 * np.sin(x2) * np.cos(x2) + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
+                m1 + m2 * np.sin(x2) ** 2
+            )
+            dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
+                l * (m1 + m2 * np.sin(x2) ** 2)
+            )
+
+            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
+
+        tt = np.linspace(0, self.tau, 2)
+        xx0 = np.array(self.state).flatten()
+        s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
+
+        x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
+
+        state = (x, x_dot, theta, theta_dot)
+        return state
+
+    def post_processing_state(self, state):
+        state = np.array([state[0], state[1], np.cos(state[2]), np.sin(state[2]), state[3]], dtype=np.float32)
+        return state
+
+    def get_reward(self):
+        return self.c.get_reward(self)
+
+
 class CartPoleContinousSwingupEnv(CartPoleEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
@@ -581,3 +684,53 @@ class CartPoleContinousSwingupEnv(CartPoleEnv):
 
     def get_reward(self):
         return self.c.get_reward(self)
+
+
+class CartPoleContinousAttractionEnv(CartPoleContinousSwingupEnv):
+    def __init__(self, render_mode: Optional[str] = None):
+        super().__init__(render_mode)
+        self.attraction_zone = 10 * np.pi / 180
+
+    def calc_new_state(self, action):
+        x, x_dot, theta, theta_dot = self.state
+        force = self.get_force(action)
+
+        # based on mathematical pendulum
+
+        def rhs(t, state):
+            x, x_dot, theta, theta_dot = state
+            x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
+            g = self.gravity
+            l = self.length
+            m1 = self.masscart
+            m2 = self.masspole
+
+            # Attraction Force
+            if np.abs(theta) < self.attraction_zone:
+                F_att = 10
+            else:
+                F_att = 0
+
+            try:
+                u1 = force[0]
+            except IndexError:
+                u1 = force
+            dx1_dt = x3
+            dx2_dt = x4
+            dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
+                m1 + m2 * np.sin(x2) ** 2
+            )
+            dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
+                l * (m1 + m2 * np.sin(x2) ** 2)
+            )
+
+            return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
+
+        tt = np.linspace(0, self.tau, 2)
+        xx0 = np.array(self.state).flatten()
+        s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
+
+        x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
+
+        state = (x, x_dot, theta, theta_dot)
+        return state

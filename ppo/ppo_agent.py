@@ -2,6 +2,7 @@ import gymnasium
 import sys, os
 import datetime
 import matplotlib.pyplot as plt
+import pickle
 
 sys.modules["gym"] = gymnasium
 import datetime as dt
@@ -71,7 +72,7 @@ class PPOAgent:
         # Save Model data
         if save_model:
             self.save_model()
-        self.eval()
+            self.eval()
         self.env.training = False
 
     def save_model(self):
@@ -80,6 +81,19 @@ class PPOAgent:
         self.model.save(model_path)
         print(f"Model saved at {model_path}")
         # save metadata
+        try:
+            history_path = os.path.join(self.folder_path, "parameter_log.pcl")
+            with open(history_path, "rb") as f:
+                paras = pickle.load(f)
+            paras["history"] = self.env.history
+            with open(history_path, "wb") as f:
+                pickle.dump(paras, f)
+        except Exception as e:
+            yellow("History file not saved!")
+            print(e)
+            print(type(e))
+            IPS()
+
         try:
             metadata_path = os.path.join(self.folder_path, "metadata.txt")
             with open(metadata_path, "a") as f:
@@ -161,8 +175,63 @@ class PPOAgent:
         plt.title("Evaluation Episodes")
         path = os.path.join("models", self.model_name, "eval.pdf")
         plt.savefig(path, format="pdf")
+        plt.clf()
 
         with open(os.path.join("models", self.model_name, "eval.txt"), "w") as f:
             f.write(f"total cost: {round(total_cost, 4)}\n")
             f.write(f"av cost per step: {round(total_cost / (episodes*steps), 4)}\n")
             f.write(f"mean steps until steady state: {round(np.mean(inside_tol) - steps, 4)}\n")
+
+        path = os.path.join("models", self.model_name, "parameter_log.pickle")
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                h = pickle.load(f)
+            h = h["history"]
+            terminated_idxs = np.where(h["terminated"])[0]
+
+            assert len(terminated_idxs) == h["episode"][-1] - h["episode"][0]
+
+            # step by step data:
+            plt.plot(h["step"], h["action"], label="Action")
+            plt.plot(h["step"], h["reward"], label="Reward", linestyle="dashed")
+            plt.vlines(terminated_idxs, ymin=-4, ymax=-3, colors="b")
+            plt.xlabel("Step")
+            plt.legend()
+            plt.savefig(os.path.join("models", self.model_name, "step_data.pdf"), format="pdf")
+            plt.clf()
+
+            # episode data
+            total_rews = []
+            total_cost = []
+            ep_length = []
+            start = 0
+            for i in range(len(terminated_idxs)):
+                end = terminated_idxs[i]
+
+                total_rews.append(sum(h["reward"][start:end]))
+                ep_length.append(end - start)
+                cost = 0
+                for k in range(start, end, 1):
+                    cost += (
+                        h["state"][k].T @ self.env.c.Q[: len(h["state"][k]), : len(h["state"][k])] @ h["state"][k]
+                        + h["action"][k] ** 2 * self.env.c.R
+                    )
+                total_cost.append(cost)
+
+                start = end
+
+            fig, ax = plt.subplots(2, 2)
+            ax[0, 0].plot(np.arange(2, h["episode"][-1], 1), total_rews)
+            ax[0, 0].set_title("Total Reward")
+
+            ax[1, 0].plot(np.arange(2, h["episode"][-1], 1), total_cost)
+            ax[1, 0].set_title("Total Cost")
+            ax[1, 0].set_xlabel("Episode")
+            ax[1, 0].sharex(ax[0, 0])
+
+            ax[0, 1].plot(np.arange(2, h["episode"][-1], 1), ep_length, label="Episode Length")
+            ax[0, 1].set_title("Episode Length")
+            ax[0, 1].set_xlabel("Episode")
+            fig.tight_layout()
+            plt.savefig(os.path.join("models", self.model_name, "episode_data.pdf"), format="pdf")
+            plt.clf()
