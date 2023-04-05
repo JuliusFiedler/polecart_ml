@@ -3,6 +3,7 @@ import sys, os
 import datetime
 import matplotlib.pyplot as plt
 import pickle
+import copy
 
 sys.modules["gym"] = gymnasium
 import datetime as dt
@@ -137,6 +138,7 @@ class PPOAgent:
             print("Reward Ep ", i, r_sum)
 
     def eval(self):
+        plots = []
         xs = []
         phis = []
         inside_tol = []
@@ -176,6 +178,7 @@ class PPOAgent:
         plt.title("Evaluation Episodes")
         path = os.path.join("models", self.model_name, "eval.pdf")
         plt.savefig(path, format="pdf")
+        plots.append(plt.gcf())
         plt.clf()
 
         with open(os.path.join("models", self.model_name, "eval.txt"), "w") as f:
@@ -200,21 +203,30 @@ class PPOAgent:
             plt.xlabel("Step")
             plt.legend()
             plt.savefig(os.path.join("models", self.model_name, "step_data.pdf"), format="pdf")
+            plots.append(copy.copy(plt.gcf()))
             plt.clf()
 
-            # episode data, reward, cost, length
+            # process data
             total_rews = []
+            avg_rews = []  # avg reward per step during an episode
             total_cost = []
+            avg_cost = []  # avg cost per step during an episode
             ep_length = []
-            rollout_length = []
+            rollout_length_ep = []
+            steps_at_term_idx = []
+            rollout_length_st = []
             start = 0
             for i in range(len(terminated_idxs)):
                 end = terminated_idxs[i]
 
                 total_rews.append(sum(h["reward"][start:end]))
+                avg_rews.append(sum(h["reward"][start:end]) / (end - start))
+                steps_at_term_idx.append(h["step"][end])
                 ep_length.append(end - start)
                 if i + 1 < len(log["NN_updates"]["episode"]):
-                    rollout_length.append(log["NN_updates"]["episode"][i + 1] - log["NN_updates"]["episode"][i])
+                    rollout_length_ep.append(log["NN_updates"]["episode"][i + 1] - log["NN_updates"]["episode"][i])
+                if i + 1 < len(log["NN_updates"]["step"]):
+                    rollout_length_st.append(log["NN_updates"]["step"][i + 1] - log["NN_updates"]["step"][i])
                 cost = 0
                 for k in range(start, end, 1):
                     cost += (
@@ -222,51 +234,100 @@ class PPOAgent:
                         + h["action"][k] ** 2 * self.env.c.R
                     )
                 total_cost.append(cost)
+                avg_cost.append(cost / (end - start))
 
                 start = end
 
-            fig, ax = plt.subplots(2, 2)
+            # episode data, reward, cost, length
+            fig, ax = plt.subplots(3, 2, figsize=(10, 15))
             ax[0, 0].plot(np.arange(2, h["episode"][-1], 1), total_rews)
-            ax[0, 0].set_title("Total Reward")
+            ax[0, 0].set_title("Total Reward per Episode")
+            ax[0, 0].set_xlabel("Episode")
             ax[0, 0].grid()
+            ax00_2 = ax[0, 0].twiny()
+            ax00_2.plot(steps_at_term_idx, total_rews, linestyle="dashed", color="tab:orange")
+            ax00_2.set_xlabel("Total Step at End of Episode")
 
             ax[0, 1].plot(np.arange(2, h["episode"][-1], 1), ep_length, label="Episode Length")
             ax[0, 1].set_title("Episode Length")
             ax[0, 1].set_xlabel("Episode")
             ax[0, 1].grid()
+            ax01_2 = ax[0, 1].twiny()
+            ax01_2.plot(steps_at_term_idx, ep_length, linestyle="dashed", color="tab:orange")
+            ax01_2.set_xlabel("Total Step at End of Episode")
 
             ax[1, 0].plot(np.arange(2, h["episode"][-1], 1), total_cost)
             ax[1, 0].set_title("Total Cost")
             ax[1, 0].set_xlabel("Episode")
-            ax[1, 0].sharex(ax[0, 0])
             ax[1, 0].grid()
+            ax10_2 = ax[1, 0].twiny()
+            ax10_2.plot(steps_at_term_idx, total_cost, linestyle="dashed", color="tab:orange")
+            ax10_2.set_xlabel("Total Step at End of Episode")
 
-            ax[1, 1].plot(np.arange(len(rollout_length)), rollout_length, label="Rollout Length")
+            ax[1, 1].plot(np.arange(len(rollout_length_ep)), rollout_length_ep, label="Rollout Length")
             ax[1, 1].set_title("Rollout Length")
             ax[1, 1].set_xlabel("Nr. Update")
+            ax[1, 1].set_ylabel("Episodes")
+            ax11_2 = ax[1, 1].twinx()
+            ax11_2.plot(
+                np.arange(len(rollout_length_st)), rollout_length_st, label="Rollout Length", linestyle="dashed"
+            )
+            ax11_2.set_ylabel("Steps")
             ax[1, 1].grid()
+
+            ax[2, 0].plot(np.arange(2, h["episode"][-1], 1), avg_rews)
+            ax[2, 0].set_title("Avg. Reward per Episode")
+            ax[2, 0].set_xlabel("Episode")
+            ax[2, 0].grid()
+            ax20_2 = ax[2, 0].twiny()
+            ax20_2.plot(steps_at_term_idx, avg_rews, linestyle="dashed", color="tab:orange")
+            ax20_2.set_xlabel("Total Step at End of Episode")
+
+            ax[2, 1].plot(np.arange(2, h["episode"][-1], 1), avg_cost, label="Episode Length")
+            ax[2, 1].set_title("Avg. Cost")
+            ax[2, 1].set_xlabel("Episode")
+            ax[2, 1].grid()
+            ax21_2 = ax[2, 1].twiny()
+            ax21_2.plot(steps_at_term_idx, avg_cost, linestyle="dashed", color="tab:orange")
+            ax21_2.set_xlabel("Total Step at End of Episode")
 
             fig.tight_layout()
             fig.suptitle(self.model_name)
             fig.subplots_adjust(top=0.85)
             plt.savefig(os.path.join("models", self.model_name, "episode_data.pdf"), format="pdf")
+            plots.append(plt.gcf())
             plt.clf()
 
             # progression of linearized NN
+            fig, ax = plt.subplots()
+            ax2 = ax.twinx()
             colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
             for i in range(len(log["NN_updates"]["linearization"][0])):
-                plt.plot(
+                ax.plot(
                     log["NN_updates"]["episode"],
                     np.array(log["NN_updates"]["linearization"])[:, i],
                     label=f"$K_{i+1}$",
                     color=colors[i],
                 )
-                plt.scatter(log["NN_updates"]["episode"][-1], -LQR_IDEAL["F"][0, i], label=f"$LQR K_{i}$", c=colors[i])
-            plt.legend()
-            plt.xlabel("Episode")
-            plt.grid()
-            plt.title("Evolution of linearized NN")
+                ax.scatter(log["NN_updates"]["episode"][-1], -LQR_IDEAL["F"][0, i], label=f"$LQR K_{i}$", c=colors[i])
+            ax.legend()
+            ax.set_xlabel("Episode")
+            ax.grid()
+            ax2.set_ylim(ax.get_ylim())
+            ax2.set_yticks(log["NN_updates"]["linearization"][-1])
+            ax2.set_yticklabels(log["NN_updates"]["linearization"][-1])
+            fig.suptitle("Evolution of linearized NN")
             plt.savefig(os.path.join("models", self.model_name, "linearization_log.pdf"), format="pdf")
+            plots.append(plt.gcf())
             plt.clf()
 
-            #
+            # add all plots to one big plot
+            fig, ax = plt.subplots(2, 2)
+            for i in range(ax.shape[0]):
+                for k in range(ax.shape[1]):
+                    try:
+                        ax[i, k] = plots[2 * i + k]
+                    except IndexError:
+                        pass
+            fig.suptitle(self.model_name)
+            plt.savefig(os.path.join("models", self.model_name, "Info.pdf"), format="pdf")

@@ -29,10 +29,10 @@ np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
 
 ### --- Mode --- ###
-mode = "train"
+# mode = "train"
 # mode = "retrain"
 # mode = "play"
-# mode = "eval"
+mode = "eval"
 # mode = "cooperative"
 # mode = "manual"
 # mode = "state_feedback"
@@ -58,6 +58,7 @@ env2 = CartPoleContinous2Env()
 #     "weight": -th.tensor([[-25.62277, -45.25930, -240.50705, -70.60946]], requires_grad=True)
 #     }
 agent = PPOAgent(env)
+# agent = FeedbackAgent(env, F_LQR_2)
 # agent = ManualAgent(env)
 
 ### --- Callback --- ###
@@ -70,23 +71,23 @@ if mode == "train":
 
 if mode == "retrain":
     # env.render_mode = "human"
-    model_name = "CartPoleContinous2Env___2023_04_04__15_22_29__max_tr_1000__trunc__best"
+    model_name = "CartPoleContinous2Env___2023_04_04__11_25_46__best"
     assert agent.env.name in model_name, "wrong environment"
     agent.load_model(model_name)
     # agent.model.env = env
     print("continue Training")
-    agent.train(100000, callback=callback)
+    agent.train(300000, callback=callback)
 
 elif mode == "eval":
     print("Eval")
     # env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_04_04__16_54_21")
+    agent.load_model("CartPoleContinous2Env___2023_04_04__11_25_46__best")
     agent.eval()
 
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_04_04__16_54_21")
+    agent.load_model("CartPoleContinous5StateEnv___2023_04_03__17_06_19")
     agent.play(10)
 
 elif mode == "cooperative":
