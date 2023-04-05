@@ -12,8 +12,8 @@ from util import *
 activate_ips_on_exception()
 
 # model_name = "CartPoleContinous2Env___2023_03_16__11_03_00_good"
-model_name = "CartPoleContinous2Env___2023_04_04__15_22_29"
-model_name_compare = "CartPoleContinous2Env___2023_04_04__11_10_59__max_tr_1000__x_off"
+model_name = "CartPoleContinous2Env___2023_04_04__11_25_46__best"
+model_name_compare = "CartPoleContinous2Env___2023_04_04__15_22_29__max_tr_1000__trunc__best"
 
 # path = os.path.join(ROOT_PATH, "models", model_name, "parameter_log.pickle")
 
@@ -157,11 +157,12 @@ def parameter_evolution():
 
         # for k, layer_list in enumerate(all_data):
         for k, layer_list in enumerate(data_dict.values()):
+            shape = layer_list[i].shape
             if len(layer_list[i].shape) == 2:
                 if layer_list[i].shape[0] < layer_list[i].shape[1]:
                     layer_list[i] = layer_list[i].T
             visualize_layer(surf, layer_list[i], offset_l, offset_t, k % 3, max_value)
-            text_to_screen(surf, keys[k], (offset_l + 5, 770), fontsize=12, rotation=90)
+            text_to_screen(surf, keys[k] + " " + str(shape), (offset_l + 5, 770), fontsize=12, rotation=90)
             if len(layer_list[i].shape) == 2:
                 off_l = layer_list[i].shape[1] * block_size[0]
             else:
@@ -375,11 +376,12 @@ def compare_parameters(idx=-1):
         text_to_screen(surf, f"Step {logs['NN_updates']['step'][idx]}", (100, 920))
 
         for k, layer in enumerate(comp_dict.values()):
+            shape = layer.shape
             if len(layer.shape) == 2:
                 if layer.shape[0] < layer.shape[1]:
                     layer = layer.T
             visualize_layer(surf, layer, offset_l, offset_t, k % 3, max_v, v=3)
-            text_to_screen(surf, keys[k], (offset_l + 5, 770), fontsize=12, rotation=90)
+            text_to_screen(surf, keys[k] + " " + str(shape), (offset_l + 5, 770), fontsize=12, rotation=90)
             if len(layer.shape) == 2:
                 off_l = layer.shape[1] * block_size[0]
             else:
