@@ -14,6 +14,9 @@ R = 1
 x_tolerance = 0.05
 phi_tolerance = 0.01
 
+# action space
+max_action = 100
+
 
 # reset bounds
 def get_reset_bounds(env):
@@ -52,5 +55,6 @@ def get_reward(env: CartPoleEnv):
 
 ### -------------------------------------------- ###
 """
-reset after 1000 steps, but with truncated
+-100 < a < 100
+episode cap
 """

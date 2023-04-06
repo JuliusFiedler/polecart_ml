@@ -511,8 +511,9 @@ class CartPoleContinousEnv(CartPoleEnv):
 class CartPoleContinous2Env(CartPoleEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
-        self.action_space = spaces.Box(-10, 10, (1,), float)
         import envs.parameter.CartPoleContinous2Env as c
+
+        self.action_space = spaces.Box(-c.max_action, c.max_action, (1,), float)
 
         self.c = c
         self.seed = c.START_SEED

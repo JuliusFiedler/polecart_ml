@@ -31,8 +31,8 @@ folder_path = os.path.abspath(os.path.dirname(__file__))
 ### --- Mode --- ###
 # mode = "train"
 # mode = "retrain"
-# mode = "play"
-mode = "eval"
+mode = "play"
+# mode = "eval"
 # mode = "cooperative"
 # mode = "manual"
 # mode = "state_feedback"
@@ -67,7 +67,7 @@ callback = CustomCallback()
 if mode == "train":
     # env.render_mode = "human"
     print("Training")
-    agent.train(total_timesteps=3e5, callback=callback)
+    agent.train(total_timesteps=3e5, callback=callback)  # , save_model=False)
 
 if mode == "retrain":
     # env.render_mode = "human"
@@ -81,13 +81,13 @@ if mode == "retrain":
 elif mode == "eval":
     print("Eval")
     # env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_04_04__11_25_46__best")
+    agent.load_model("CartPoleContinous2Env___2023_04_04__15_22_29__max_tr_1000__trunc__best")
     agent.eval()
 
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous5StateEnv___2023_04_03__17_06_19")
+    agent.load_model("CartPoleContinous2Env___2023_04_04__11_25_46__best")
     agent.play(10)
 
 elif mode == "cooperative":
