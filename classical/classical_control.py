@@ -1,21 +1,38 @@
 import numpy as np
 import csv
-import os
+import os, sys
+import matplotlib.pyplot as plt
+from ipydex import IPS
 
 import util
+from agents.agent import BaseAgent
 
 
-class FeedbackAgent:
+class FeedbackAgent(BaseAgent):
     def __init__(self, env, F) -> None:
         self.env = env
         self.F = F
-        self.model_name = F["note"]
+        self.model_name = self.env.name + "__" + F["note"]
 
     def get_action(self, state):
         state = util.project_to_interval(state - self.F["eq"], min=-np.pi, max=np.pi)
-        u = -self.F["F"] @ np.array(state)
+        u = -self.F["F"] @ np.array(state).T
         action = np.clip(u, self.env.action_space.low[0], self.env.action_space.high[0])
-        return action
+        return action.T
+
+    def get_value(self, state, action=0):
+        if state.shape[1] == self.F["F"].shape[1]:
+            J = np.diag(state @ self.F["Q"] @ state.T)
+        else:
+            J = state.T @ self.F["Q"] @ state
+
+        return J
+
+    def load_model(self, name):
+        print(util.yellow("This is a feedback Agent, loading doesnt make sense here."))
+
+    def eval(self):
+        self.run_eval_episodes()
 
 
 class FeedforwardAgent:
@@ -66,21 +83,29 @@ F_LQR_1 = {
     "note": "LQR Q=np.diag([100, 100, 100, 100]) R=1",
     "F": np.array([[-9.999999999999986, -16.266056714636235, -90.5387468119659, -22.64298172774513]]),
     "eq": np.array([0, 0, 0, 0]),
+    "Q": np.diag([100, 100, 100, 100]),
+    "R": 1,
 }
 F_LQR_2 = {
     "note": "LQR Q=np.diag([1000, 1000, 1000, 1000]) R=1",
     "F": np.array([[-31.622776601683427, -50.259303062636604, -246.50705065047896, -63.60946003330605]]),
     "eq": np.array([0, 0, 0, 0]),
+    "Q": np.diag([1000, 1000, 1000, 1000]),
+    "R": 1,
 }
 F_LQR_3 = {
     "note": "LQR Q=np.diag([1000, 1000, 0, 0]) R=1",
     "F": np.array([[-31.622776601684222, -23.899312329610922, -98.40512423898201, -21.037765755811748]]),
     "eq": np.array([0, 0, 0, 0]),
+    "Q": np.diag([1000, 1000, 0, 0]),
+    "R": 1,
 }
 F_LQR_4 = {
     "note": "LQR Q=np.diag([100, 100, 0, 0]) R=100",
     "F": np.array([[-0.9999999999998335, -1.8680009386439562, -26.925641920732488, -6.074588171203054]]),
     "eq": np.array([0, 0, 0, 0]),
+    "Q": np.diag([100, 100, 0, 0]),
+    "R": 1,
 }
 F_EV_real_LOWER_EQ_1 = {
     "note": "stabilizing the lower equilibrium point, place eigenvalues: [-8., -7., -6., -5.]",
@@ -96,6 +121,8 @@ F_LQR_LOWER_EQ_1 = {
     "note": "LQR stabilizing the lower equilibrium point Q=np.diag([1000, 1000, 1000, 1000]) R=1",
     "F": np.array([[31.622776601683597, 43.28803503081849, 125.73324499512717, 15.65939564338845]]),
     "eq": np.array([0, 0, -np.pi, 0]),
+    "Q": np.diag([1000, 1000, 1000, 1000]),
+    "R": 1,
 }
 F_NN_lin_1 = {
     "note": "NN cartpole_model__CartPoleContinous2Env___2023_03_02__16_40_49: linearized",

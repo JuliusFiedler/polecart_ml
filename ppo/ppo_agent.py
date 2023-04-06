@@ -4,6 +4,7 @@ import datetime
 import matplotlib.pyplot as plt
 import pickle
 import copy
+import torch as th
 
 sys.modules["gym"] = gymnasium
 import datetime as dt
@@ -11,14 +12,15 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.monitor import Monitor
 from classical.classical_control import F_LQR_2 as LQR_IDEAL
+from agents.agent import BaseAgent
 from ipydex import IPS
 
 from util import *
 
 
-class PPOAgent:
+class PPOAgent(BaseAgent):
     def __init__(self, env, *args, **kwargs) -> None:
-        self.env = env
+        super().__init__(env)
         self.seed = env.c.START_SEED
         self.model = None
         self.tensorboard_log = None
@@ -125,66 +127,56 @@ class PPOAgent:
     def get_action(self, obs):
         return self.model.predict(obs, deterministic=True)[0]
 
+    def get_value(self, state):
+        if isinstance(state, np.ndarray):
+            state = th.from_numpy(state)
+        values = self.model.policy.predict_values(state)[:, 0].detach().numpy()
+        return values
+
+    def get_real_state_value(self, obs):
+        env = copy.copy(self.env)
+        env.render_mode = False
+        env.reset(state=obs)
+        done = False
+        gamma = 0.99
+        i = 0
+        V = env.c.get_reward(env)[0]
+        while not done:
+            # if i%10 == 9:
+            #     print(i)
+            action = self.get_action(obs)
+            obs, rew, term, trunc, _ = env.step(action)
+            V += gamma**i * rew
+            if term or trunc:
+                done = True
+            if abs(gamma**i * rew) < 1e-3:
+                done = True
+            i += 1
+        return V
+
     def play(self, num_ep=10, render=True):
         self.env.target_change_period = 500
         for i in range(num_ep):
             done = trunc = False
             obs, _ = self.env.reset()
             r_sum = 0
+            k = 0
             while not done and not trunc:
                 action, _ = self.model.predict(obs, deterministic=True)
                 obs, reward, done, trunc, info = self.env.step(action)
+                if k % 20 == 0:
+                    print(
+                        "real - est",
+                        self.get_real_state_value(obs)
+                        - self.model.policy.predict_values(th.tensor(np.array([obs]))).detach().numpy(),
+                    )
                 r_sum += reward
-            print("Reward Ep ", i, r_sum)
+                k += 1
+            # print("Reward Ep ", i, r_sum)
 
     def eval(self):
         plots = []
-        xs = []
-        phis = []
-        inside_tol = []
-        total_cost = 0
-        episodes = 3
-        steps = 1000
-        for i in range(episodes):
-            obs, _ = self.env.reset(state=np.array(self.env.c.EVAL_STATE) / (i + 2))
-            for j in range(steps):
-                xs.append(obs[0])
-                phis.append(obs[2])
-                action, _ = self.model.predict(obs, deterministic=True)
-                obs, reward, done, trunc, info = self.env.step(action)
-                # add cost
-                total_cost += (obs.T @ self.env.c.Q @ obs + action.T * self.env.c.R * action)[0]
-                if done:
-                    break
-
-        phis.reverse()
-        xs.reverse()
-        phi_tolerance = self.env.c.phi_tolerance
-        x_tolerance = self.env.c.x_tolerance
-        for i in range(episodes):
-            for j, phi in enumerate(phis[i * 1000 : (i + 1) * 1000]):
-                if np.abs(phi) > phi_tolerance or np.abs(xs[steps * i + j]) > x_tolerance:
-                    inside_tol.append((episodes - i) * steps - j)
-                    break
-        phis.reverse()
-        xs.reverse()
-
-        tol_lines = [-phi_tolerance, phi_tolerance, -x_tolerance, x_tolerance]
-        plt.hlines(tol_lines, xmin=0, xmax=steps * episodes, colors="gray", linewidth=0.5)
-        plt.plot(np.arange(len(xs)), xs, label=r"$x$")
-        plt.plot(np.arange(len(phis)), phis, label=r"$\varphi$")
-        plt.vlines(inside_tol, ymin=min(phis), ymax=max(phis), colors="red")
-        plt.legend()
-        plt.title("Evaluation Episodes")
-        path = os.path.join("models", self.model_name, "eval.pdf")
-        plt.savefig(path, format="pdf")
-        plots.append(plt.gcf())
-        plt.clf()
-
-        with open(os.path.join("models", self.model_name, "eval.txt"), "w") as f:
-            f.write(f"total cost: {round(total_cost, 4)}\n")
-            f.write(f"av cost per step: {round(total_cost / (episodes*steps), 4)}\n")
-            f.write(f"mean steps until steady state: {round(np.mean(inside_tol) - steps, 4)}\n")
+        self.run_eval_episodes()
 
         # visualize training
         path = os.path.join("models", self.model_name, "training_logs.p")
