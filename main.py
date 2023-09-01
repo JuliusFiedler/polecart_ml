@@ -16,6 +16,8 @@ from envs.cartpole_transition import (
     CartPoleTransitionContinousEnv,
     CartPoleTransitionContinous2Env,
 )
+from envs.pendulum import StdPendulumEnv
+from envs.reaction_wheel import DefaultReactionWheelEnv
 from ppo.ppo_agent import PPOAgent
 from manual.roly_poly import RolyPolyAgent
 from classical.classical_control import *
@@ -47,9 +49,13 @@ mode = "play"
 # env = CartPoleContinousSwingupEnv()
 # env = CartPoleContinous5StateEnv()
 env = CartPoleContinous2Env()
+# env = CartPoleDiscreteEnv()
 env2 = CartPoleContinous2Env()
 # env = CartPoleTransitionDiscreteEnv()
 # env = CartPoleTransitionContinous2Env()
+
+# env = StdPendulumEnv()
+env = DefaultReactionWheelEnv()
 
 ### --- Agent --- ###
 # agent = PPOAgent(env, policy_kwargs={"net_arch": {'pi': [], 'vf': [64, 64]}})
@@ -67,46 +73,60 @@ callback = CustomCallback()
 if mode == "train":
     # env.render_mode = "human"
     print("Training")
-    agent.train(total_timesteps=3e5, callback=callback)  # , save_model=False)
+    agent.train(total_timesteps=1e5, callback=callback)  # , save_model=False)
 
 if mode == "retrain":
     # env.render_mode = "human"
-    model_name = "CartPoleContinous2Env___2023_04_04__11_25_46__best"
+    model_name = "CartPoleContinous2Env___2023_04_12__10_36_25"
     assert agent.env.name in model_name, "wrong environment"
     agent.load_model(model_name)
     # agent.model.env = env
     print("continue Training")
-    agent.train(300000, callback=callback)
+    agent.train(1000000, callback=callback)
 
 elif mode == "eval":
     print("Eval")
     # env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_04_04__15_22_29__max_tr_1000__trunc__best")
+    agent.load_model("CartPoleContinous2Env___2023_04_12__14_57_36")
     agent.eval()
 
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("CartPoleContinous2Env___2023_04_04__11_25_46__best")
+    agent.load_model("DefaultReactionWheelEnv___2023_08_31__16_49_43")
     agent.play(10)
 
 elif mode == "cooperative":
     env.render_mode = "human"
-    swingup_agent = (
-        "CartPoleContinousSwingupEnv___2023_03_08__11_14_01"  # CartPoleContinousSwingupEnv___2023_03_08__11_16_25
-    )
-    balance_agent = "CartPoleContinous2Env___2023_03_06__15_13_42"
+    
+    system = "cartpole"
+    # system = "pendulum"
+    
+    if system == "cartpole":
+        swingup_agent = (
+            "CartPoleContinousSwingupEnv___2023_03_08__11_14_01"  # CartPoleContinousSwingupEnv___2023_03_08__11_16_25
+        )
+        balance_agent = "CartPoleContinous2Env___2023_03_06__15_13_42"
+        catch_threshold = 0.5
+    elif system == "pendulum":
+        swingup_agent = "StdPendulumEnv___2023_07_11__14_09_12_swingup"
+        balance_agent = "StdPendulumEnv___2023_07_11__14_52_05_upper"
+        catch_threshold = np.pi / 180 * 45
+    
     agent.load_model(swingup_agent)
 
-    catch_threshold = 0.5
     current_agent = swingup_agent
     obs, _ = env.reset()
     while True:
-        if current_agent == swingup_agent and np.abs(util.project_to_interval(obs[2])) <= catch_threshold:
+        if system == "cartpole":
+            angle = obs[2]
+        elif system == "pendulum":
+            angle = env.state[0]
+        if current_agent == swingup_agent and np.abs(util.project_to_interval(angle)) <= catch_threshold:
             current_agent = balance_agent
             agent.load_model(balance_agent)
             print("switching to balance")
-        if current_agent == balance_agent and np.abs(util.project_to_interval(obs[2])) > catch_threshold:
+        if current_agent == balance_agent and np.abs(util.project_to_interval(angle)) > catch_threshold:
             current_agent = swingup_agent
             agent.load_model(swingup_agent)
             print("switching to swingup")
@@ -121,6 +141,8 @@ elif mode == "manual":
     env.reset()
     a = 0
     while True:
+        # a = np.array([(np.random.random(1)-0.5)*1e-3], dtype=np.float32)[0,0]
+        a = env.action_space.sample()
         if isinstance(env.action_space, gym.spaces.Box) and not isinstance(a, np.ndarray):
             a = np.array([a])
         state1, reward, terminated, truncated, info = env.step(a)
