@@ -18,6 +18,8 @@ from envs.cartpole_transition import (
 )
 from envs.pendulum import StdPendulumEnv
 from envs.reaction_wheel import DefaultReactionWheelEnv
+from envs.ballbeam import DefaultBallBeamEnv
+from envs.manipulator import ManipulatorEnv
 from ppo.ppo_agent import PPOAgent
 from manual.roly_poly import RolyPolyAgent
 from classical.classical_control import *
@@ -31,12 +33,14 @@ np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
 
 ### --- Mode --- ###
-# mode = "train"
+mode = "train"
 # mode = "retrain"
-mode = "play"
+# mode = "play"
 # mode = "eval"
 # mode = "cooperative"
 # mode = "manual"
+# mode = "rwp_up_hold"
+# mode = "pid"
 # mode = "state_feedback"
 # mode = "generate swingup trajectory"
 # mode = "input from file"
@@ -55,15 +59,19 @@ env2 = CartPoleContinous2Env()
 # env = CartPoleTransitionContinous2Env()
 
 # env = StdPendulumEnv()
-env = DefaultReactionWheelEnv()
+# env = DefaultReactionWheelEnv()
+env = DefaultBallBeamEnv()
+env = ManipulatorEnv()
 
 ### --- Agent --- ###
-# agent = PPOAgent(env, policy_kwargs={"net_arch": {'pi': [], 'vf': [64, 64]}})
+# agent = PPOAgent(env, policy_kwargs={"net_arch": {'pi': [2000], 'vf': [100, 100]}})
 # agent.action_net_kwargs = {
 #     "bias": None,
 #     "weight": -th.tensor([[-25.62277, -45.25930, -240.50705, -70.60946]], requires_grad=True)
 #     }
 agent = PPOAgent(env)
+# agent = JacobianApproximationControl(env)
+# agent = ExactLinearizationAgent(env)
 # agent = FeedbackAgent(env, F_LQR_2)
 # agent = ManualAgent(env)
 
@@ -73,7 +81,7 @@ callback = CustomCallback()
 if mode == "train":
     # env.render_mode = "human"
     print("Training")
-    agent.train(total_timesteps=1e5, callback=callback)  # , save_model=False)
+    agent.train(total_timesteps=1e6, callback=callback, eval=False)  # , save_model=False)
 
 if mode == "retrain":
     # env.render_mode = "human"
@@ -93,15 +101,15 @@ elif mode == "eval":
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("DefaultReactionWheelEnv___2023_08_31__16_49_43")
+    agent.load_model("DefaultBallBeamEnv___2023_09_13__15_28_23__also_good")
     agent.play(10)
 
 elif mode == "cooperative":
     env.render_mode = "human"
-    
+
     system = "cartpole"
     # system = "pendulum"
-    
+
     if system == "cartpole":
         swingup_agent = (
             "CartPoleContinousSwingupEnv___2023_03_08__11_14_01"  # CartPoleContinousSwingupEnv___2023_03_08__11_16_25
@@ -112,7 +120,7 @@ elif mode == "cooperative":
         swingup_agent = "StdPendulumEnv___2023_07_11__14_09_12_swingup"
         balance_agent = "StdPendulumEnv___2023_07_11__14_52_05_upper"
         catch_threshold = np.pi / 180 * 45
-    
+
     agent.load_model(swingup_agent)
 
     current_agent = swingup_agent
@@ -138,28 +146,138 @@ elif mode == "cooperative":
 
 elif mode == "manual":
     env.render_mode = "human"
-    env.reset()
+    state, _ = env.reset(state=np.array([0.0, 0, 0, 0]))
     a = 0
+    r = True
+    t = 0
     while True:
         # a = np.array([(np.random.random(1)-0.5)*1e-3], dtype=np.float32)[0,0]
-        a = env.action_space.sample()
+        # a = env.action_space.sample()
+        # if env.ep_step_count > 100 and abs(state1[-1]) > 0 and r==True:
+        #     a = - state[-1] * 0.0001
+        a = agent.get_action(state, t)
+
+        a = np.clip(a, env.action_space.low[0], env.action_space.high[0])
         if isinstance(env.action_space, gym.spaces.Box) and not isinstance(a, np.ndarray):
             a = np.array([a])
-        state1, reward, terminated, truncated, info = env.step(a)
-        if terminated:
-            obs, _ = env.reset()
+        state, reward, terminated, truncated, info = env.step(a)
+        t += env.tau
+        if terminated or truncated:
+            state, _ = env.reset(state=np.array([0.1, 0, 0, 0]))
+            a = 0
+
+elif mode == "rwp_up_hold":
+    env.render_mode = "human"
+    state, _ = env.reset(state=np.array([np.pi-0.4, 0, 0, 0]))
+    a = 0
+    r = True
+    s = 0
+    controller = "up"
+    integral = 0
+    prevError = 0
+    timeDelta = env.tau
+    Kp = 2
+    Ki = 0
+    Kd = 0.1
+    max_v = 500
+    while True:
+        if controller == "up":
+            # swingup
+            # speed up
+            if s == 0:
+                if state[-1] < max_v:
+                    a = 0.001
+                else:
+                    s = 1
+                    a = 0
+            # detect turning point
+            elif s == 1:
+                if np.abs(state[1]) < 0.1 and state[0] < np.pi and state[-1] > 0:
+                    s = 2
+                if np.abs(state[1]) < 0.1 and state[0] > np.pi and state[-1] < 0:
+                    s = 3
+            elif s == 2:
+                if state[-1] > 0:
+                    a = -0.1
+                elif state[-1] > -max_v:
+                    a = -0.001
+                else:
+                    s = 1
+                    a = 0
+            elif s == 3:
+                if state[-1] < 0:
+                    a = 0.1
+                elif state[-1] < max_v:
+                    a = 0.001
+                else:
+                    s = 1
+                    a = 0
+            elif np.abs(util.project_to_interval(state[0])) < 0.1:
+                controller = "PID"
+                integral = 0
+                prev_error = 0
+        if controller == "PID":
+            error = state[0]
+            integral += error * timeDelta
+            derivative = (error - prevError) / timeDelta
+            prevError = error
+            a = Kp * error + Ki * integral + Kd * derivative
+            if np.abs(util.project_to_interval(state[0])) > 0.3:
+                controller = "up"
+
+        if isinstance(env.action_space, gym.spaces.Box) and not isinstance(a, np.ndarray):
+            a = np.array([a])
+        if controller == "PID" and not env.action_space.contains(a):
+            integral -= error * timeDelta
+        a = np.clip(a, env.action_space.low[0], env.action_space.high[0])
+        state, reward, terminated, truncated, info = env.step(a)
+        if terminated or truncated:
+            state, _ = env.reset(state=np.array([np.pi, 0, 0, 0]))
+            a = 0
+            s = 0
+            integral = 0
+            prev_error = 0
+
+elif mode == "pid":
+    env.render_mode = "human"
+    state, _ = env.reset(state=np.array([0.1, 0, 0, 0]))
+    a = 0
+    integral = 0
+    prevError = 0
+    timeDelta = env.tau
+    Kp = 2
+    Ki = 0
+    Kd = 0.1
+    while True:
+        error = state[0]
+        integral += error * timeDelta
+        derivative = (error - prevError) / timeDelta
+        prevError = error
+        a = Kp * error + Ki * integral + Kd * derivative
+        if isinstance(env.action_space, gym.spaces.Box) and not isinstance(a, np.ndarray):
+            a = np.array([a])
+        # arw
+        if not env.action_space.contains(a):
+            integral -= error * timeDelta
+
+        a = np.clip(a, env.action_space.low[0], env.action_space.high[0])
+        state, reward, terminated, truncated, info = env.step(a)
+        if terminated or truncated:
+            state, _ = env.reset(state=np.array([0.1, 0, 0, 0]))
+            integral = 0
+            prev_error = 0
 
 elif mode == "state_feedback":
     env.render_mode = "human"
-    state1, _ = env.reset(state=np.array([0, 0, 0.1, 0]))
+    state1, _ = env.reset(state=np.array([0.1, 0, 0, 0]))
     while True:
-        F = F_LQR_2
-        state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
+        F = F_PP_BB_1
+        # state1 = util.project_to_interval(state1 - F["eq"], min=-np.pi, max=np.pi)
         u = -F["F"] @ np.array(state1)
         action = np.clip(u, env.action_space.low[0], env.action_space.high[0])
         state1, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
-            state1, _ = env.reset()
+            state1, _ = env.reset(state=np.array([0.1, 0, 0, 0]))
 
 elif mode == "generate swingup trajectory":
     env.render_mode = "human"
@@ -323,19 +441,20 @@ elif mode == "compare":
     plt.show()
 
 elif mode == "test":
-    from ppo.supervised import PretrainedNet
-    import torch
-
-    net = PretrainedNet()
-    net.load_state_dict(torch.load("trajectories/swingupNN.pth"))
 
     env.render_mode = "human"
-    state, _ = env.reset(state=np.array([0, 0, np.pi, 0]))
+    state, _ = env.reset(state=np.array([0, 0, 0, 0]))
+    diff = 10
+    dec = 50
     while True:
-        action = net(torch.from_numpy(state)).detach().numpy()
-        action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
+        if env.ep_step_count < diff:
+            action = 10
+        elif dec <= env.ep_step_count and env.ep_step_count < dec+diff:
+            action = -10
+        else:
+            action = 0
+        # action = np.sin(env.ep_step_count/10)
         state, r, ter, tru, _ = env.step(action)
-        if abs(state[2]) < 0.1:
-            print("swingup done")
-        if ter:
-            state, _ = env.reset()
+        if ter or tru:
+            env.reset()
+

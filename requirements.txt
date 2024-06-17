@@ -10,3 +10,4 @@ ipydex
 datetime
 colorama
 pygame
+tensorboard
