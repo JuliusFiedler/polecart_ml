@@ -33,7 +33,7 @@ np.random.seed(1)
 folder_path = os.path.abspath(os.path.dirname(__file__))
 
 ### --- Mode --- ###
-mode = "train"
+# mode = "train"
 # mode = "retrain"
 # mode = "play"
 # mode = "eval"
@@ -41,7 +41,7 @@ mode = "train"
 # mode = "manual"
 # mode = "rwp_up_hold"
 # mode = "pid"
-# mode = "state_feedback"
+mode = "state_feedback"
 # mode = "generate swingup trajectory"
 # mode = "input from file"
 # mode = "rp"
@@ -61,7 +61,7 @@ env2 = CartPoleContinous2Env()
 # env = StdPendulumEnv()
 # env = DefaultReactionWheelEnv()
 env = DefaultBallBeamEnv()
-env = ManipulatorEnv()
+# env = ManipulatorEnv()
 
 ### --- Agent --- ###
 # agent = PPOAgent(env, policy_kwargs={"net_arch": {'pi': [2000], 'vf': [100, 100]}})
@@ -69,10 +69,10 @@ env = ManipulatorEnv()
 #     "bias": None,
 #     "weight": -th.tensor([[-25.62277, -45.25930, -240.50705, -70.60946]], requires_grad=True)
 #     }
-agent = PPOAgent(env)
+# agent = PPOAgent(env)
 # agent = JacobianApproximationControl(env)
 # agent = ExactLinearizationAgent(env)
-# agent = FeedbackAgent(env, F_LQR_2)
+agent = FeedbackAgent(env, F_LQR_BB_1)
 # agent = ManualAgent(env)
 
 ### --- Callback --- ###
@@ -81,7 +81,7 @@ callback = CustomCallback()
 if mode == "train":
     # env.render_mode = "human"
     print("Training")
-    agent.train(total_timesteps=1e6, callback=callback, eval=False)  # , save_model=False)
+    agent.train(total_timesteps=1e5, callback=callback, eval=False)  # , save_model=False)
 
 if mode == "retrain":
     # env.render_mode = "human"
@@ -101,7 +101,7 @@ elif mode == "eval":
 elif mode == "play":
     print("Play")
     env.render_mode = "human"
-    agent.load_model("DefaultBallBeamEnv___2023_09_13__15_28_23__also_good")
+    agent.load_model("DefaultBallBeamEnv___2023_09_13__15_25_27__good")
     agent.play(10)
 
 elif mode == "cooperative":
@@ -443,18 +443,34 @@ elif mode == "compare":
 elif mode == "test":
 
     env.render_mode = "human"
-    state, _ = env.reset(state=np.array([0, 0, 0, 0]))
+    state, _ = env.reset(state=np.array([0, 0, 0, 0, 0, 0]))
     diff = 10
     dec = 50
+    counter = 0
+    back_transition = False
     while True:
+        action = 0
+        if env.ep_step_count == 0:
+            start_angle = state[1]
         if env.ep_step_count < diff:
             action = 10
-        elif dec <= env.ep_step_count and env.ep_step_count < dec+diff:
+        if (np.abs((state[1] - start_angle) % (np.pi*2)) < 0.07 \
+            or np.abs((state[1] - start_angle) % (np.pi*2) - 2*np.pi) < 0.07) \
+            and env.ep_step_count > diff:
+            back_transition = True
+
+        if back_transition:
             action = -10
-        else:
-            action = 0
+            counter += 1
+
+        if counter == 10:
+            back_transition = False
+            counter = 0
+
         # action = np.sin(env.ep_step_count/10)
         state, r, ter, tru, _ = env.step(action)
         if ter or tru:
+            counter = 0
+            back_transition = False
             env.reset()
 

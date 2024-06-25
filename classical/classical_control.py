@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import sin, cos
 import csv
 import os, sys
 import matplotlib.pyplot as plt
@@ -14,13 +15,13 @@ class FeedbackAgent(BaseAgent):
         self.F = F
         self.model_name = self.env.name + "__" + F["note"]
 
-    def get_action(self, state):
+    def get_action(self, state, *args):
         state = util.project_to_interval(state - self.F["eq"], min=-np.pi, max=np.pi)
         u = -self.F["F"] @ np.array(state).T
         action = np.clip(u, self.env.action_space.low[0], self.env.action_space.high[0])
         return action.T
 
-    def get_value(self, state, action=0):
+    def get_cost(self, state, action=0):
         if state.shape[1] == self.F["F"].shape[1]:
             J = np.diag(state @ self.F["Q"] @ state.T)
         else:
@@ -28,12 +29,52 @@ class FeedbackAgent(BaseAgent):
 
         return J
 
+    def get_value(self, state, action=0):
+        return self.get_cost(state, action)
+
     def load_model(self, name):
         print(util.yellow("This is a feedback Agent, loading doesnt make sense here."))
 
     def eval(self):
         self.run_eval_episodes()
 
+class ExactLinearizationAgent:
+    """for reaction wheel pendulum"""
+    def __init__(self, env) -> None:
+        self.env = env
+        self.model_name = "ELA"
+   
+    def get_action(self, state, *args):
+        p1, pdot1, p2, pdot2 = state
+        g, m1, m2, s, l, I1, I2, J, m = self.env.parameters
+        k1 = 1
+        k2 = 3
+        k3 = 3
+        u = -(I1 + l**2*m2 + m1*s**2)*(-g*k2*(l*m2 + m1*s)*sin(p1) - g*k3*pdot1*(l*m2 + m1*s)*cos(p1) - g*(l*m2 + m1*s)*(-g*(l*m2 + m1*s)*cos(p1) + pdot1**2*(I1 + l**2*m2 + m1*s**2))*sin(p1)/(-I1 - l**2*m2 - m1*s**2) - k1*(I2*pdot2 + pdot1*(I1 + I2 + l**2*m2 + m1*s**2)))/(g*(l*m2 + m1*s)*cos(p1))
+        return np.clip(u, self.env.action_space.low[0], self.env.action_space.high[0])
+
+    def load_model(self, name):
+        pass
+    
+class JacobianApproximationControl:
+    """for beam ball"""
+    def __init__(self, env) -> None:
+        self.env = env
+        poles = 2
+        self.ampl = 3
+        self.freq = np.pi/5
+        self.BG = env.g* env.B
+        self.gain = [util.binom(4, i) * poles**(4-i) for i in range(4)]
+        
+    def get_action(self, state, t):
+        x1, x2, x3, x4 = state
+        y = [x1, x2, -self.BG*x3, -self.BG*x4]
+        yref = [self.ampl * util.dsin(i, self.freq, t) for i in range(5)]
+
+        u = 1./self.BG * sum([self.gain[i]*(y[i]-yref[i]) for i in range(4)], start=-yref[4])
+        
+        tau = self.env.u_to_tau(u, state)
+        return tau
 
 class FeedforwardAgent:
     def __init__(self, env, path):
@@ -53,7 +94,7 @@ class FeedforwardAgent:
         self.counter = 0
         self.trajectory_end = False
 
-    def get_action(self, obs):
+    def get_action(self, obs, *args):
         try:
             a = np.array([self.actions[self.counter]], dtype=float)
             a = np.clip(a, self.env.action_space.low[0], self.env.action_space.high[0])
@@ -127,5 +168,40 @@ F_LQR_LOWER_EQ_1 = {
 F_NN_lin_1 = {
     "note": "NN cartpole_model__CartPoleContinous2Env___2023_03_02__16_40_49: linearized",
     "F": -np.array([[16.947, 31.633, 150.457, 40.509]]),
+    "eq": np.array([0, 0, 0, 0]),
+}
+F_LQR_RWP_1 = {
+    "note": "LQR Q = np.diag([30, 30, 30, 30]) R = 1",
+    # "F": np.array([[-16550.973140478134, -1875.682378590107, -5.477225578913931, -6.718700759811327]]),
+    "F": np.array([[-16550.973140478134, -1875.682378590107, 0, -6.718700759811327]]),
+    "eq": np.array([0, 0, 0, 0]),
+    "Q": np.diag([30, 30, 30, 30]),
+    "R": 1
+}
+F_LQR_RWP_2 = {
+    "note": "LQR  for 3 state, 0 added, Q = np.diag([30, 30, 30]) R = 1",
+    "F": np.array([[-1.48662192e+04, -1.68475490e+03, 0, -5.47722557e+00]]),
+    "eq": np.array([0, 0, 0]),
+    "Q": np.diag([30, 30, 30]),
+    "R": 1
+}
+F_PP_RWP_1 = {
+    "note": "Pole Placement -4+-2j, -8 + nachträglich F[-1]*1e-2 verkleindert",
+    "F": np.array( [[-7.93869720e-01, -8.82735934e-02, 0,  -6.53288091e-07]]),
+    "eq": np.array([0, 0, 0]),
+}
+F_PP_RWP_2 = {
+    "note": "??",
+    "F": np.array( [[-356.215, -35.857, 0,  -0.043797]]),
+    "eq": np.array([0, 0, 0]),
+}
+F_PP_BB_1 = {
+    "note": "Pole Placement [-1.3+3.4j, -1.3-3.4j, -1.5+1.2j, -1.5-1.2j]",
+    "F": np.array( [[-0.6300644137614678, -0.14085322764525993, 0.49484948, 0.1120112]]),
+    "eq": np.array([0, 0, 0, 0]),
+}
+F_LQR_BB_1 = {
+    "note": "LQR [-1.3+3.4j, -1.3-3.4j, -1.5+1.2j, -1.5-1.2j]",
+    "F": np.array( [[-5.989644501647571, -8.434361610122082, 26.20980739989586, 5.572117832137562]]),
     "eq": np.array([0, 0, 0, 0]),
 }

@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import gymnasium as gym
 import csv
+from scipy.integrate import solve_bvp, solve_ivp
 from ipydex import IPS, activate_ips_on_exception
 
 from envs.cartpole import (

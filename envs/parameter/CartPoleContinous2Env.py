@@ -42,19 +42,19 @@ def get_reward(env: CartPoleEnv):
         truncated = True
         print("reset after 1000 steps")
 
-    # Q = np.diag([1000, 1000, 1000, 1000])
-    # R = 1
-    # state = np.array(env.state).reshape(4, 1)
+    Q = np.diag([1000, 1000, 1000, 1000])
+    R = 1
+    state = np.array(env.state).reshape(4, 1)
 
-    # reward = 1 / (1 + (state.T @ Q @ state + R * env.action**2)[0, 0])
+    reward = 1000 - (state.T @ Q @ state + R * env.action**2)[0, 0]
 
-    reward = 1 - (x) ** 2
+    # reward = 1 - (x) ** 2
 
     return reward, terminated, truncated, info
 
 
 ### -------------------------------------------- ###
 """
--100 < a < 100
-episode cap
+R = 1000 - J_LQR
+no cap
 """

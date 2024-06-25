@@ -26,7 +26,6 @@ og_env = CartPoleContinousSwingupEnv()
 env = GymnasiumToGymWrapper(og_env)
 
 
-
 name = "Imitation__CartPoleContinous2Env___2023_03_16__11_03_00_good"
 folder_name = os.path.join("models", name)
 

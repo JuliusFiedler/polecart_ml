@@ -18,11 +18,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
     # TODO!!
     ## Description
 
-    This environment corresponds to the version of the cart-pole problem described by Barto, Sutton, and Anderson in
-    ["Neuronlike Adaptive Elements That Can Solve Difficult Learning Control Problem"](https://ieeexplore.ieee.org/document/6313077).
-    A pole is attached by an un-actuated joint to a cart, which moves along a frictionless track.
-    The pendulum is placed upright on the cart and the goal is to balance the pole by applying forces
-     in the left and right direction on the cart.
+    Reaction Wheel Pendulum
 
     ## Action Space
 
@@ -105,7 +101,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         }
 
         # parameters
-        self.gravity = 9.8
+        self.gravity = 9.8      
         self.masspole = 0.02
         self.masswheel = 0.3
         self.dist_pole_com = 0.063 # dist to center of mass (pole is twice as long)
@@ -115,9 +111,20 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # auxiliary values
         self.J = self.masspole*self.dist_pole_com**2 + self.masswheel*self.dist_wheel_com**2 + self.j_pole + self.j_wheel
         self.m = (self.masspole*self.dist_pole_com + self.masswheel*self.dist_wheel_com) * self.gravity
+        self.parameters = [
+            self.gravity,
+            self.masspole,
+            self.masswheel,
+            self.dist_pole_com,
+            self.dist_wheel_com,
+            self.j_pole,
+            self.j_wheel,
+            self.J,
+            self.m
+            ]
         
         self.force_mag = 10.0
-        self.tau = 0.02  # seconds between state updates
+        self.tau = 0.002  # seconds between state updates
         self.kinematics_integrator = "solve_ivp"  # "euler"
 
         # Angle at which to fail the episode
@@ -130,6 +137,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             [
                 self.phi_threshold_radians * 2,  # phi
                 np.finfo(np.float32).max,  # phidot
+                np.finfo(np.float32).max,  # theta
                 np.finfo(np.float32).max,  # thetadot
             ],
             dtype=np.float32,
@@ -141,7 +149,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.render_mode = render_mode
 
         self.screen_width = 600
-        self.screen_height = 400
+        self.screen_height = 800
         self.screen = None
         self.clock = None
         self.isopen = True
@@ -163,13 +171,13 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         raise NotImplementedError("This method has to be overwritten by subclass")
 
     def calc_new_state(self, action):
-        phi, phi_dot, theta_dot = self.state
+        phi, phi_dot, theta, theta_dot = self.state
         force = self.get_force(action)
 
         # based on mathematical pendulum
 
         def rhs(t, state):
-            x1, x2, x3 = state # phi, phi_dot, theta_dot
+            x1, x2, x3, x4 = state # phi, phi_dot, theta_dot
             try:
                 u1 = force[0]
             except IndexError:
@@ -177,17 +185,22 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 
             dx1_dt = x2
             dx2_dt = self.m / (self.J - self.j_wheel) * np.sin(x1) - 1 / (self.J - self.j_wheel) * u1
-            dx3_dt = - self.m / (self.J - self.j_wheel) * np.sin(x1) + 1 / self.j_wheel / (self.J - self.j_wheel) * u1
+            dx3_dt = x4
+            dx4_dt = - self.m / (self.J - self.j_wheel) * np.sin(x1) + 1 / self.j_wheel / (self.J - self.j_wheel) * u1
 
-            return [dx1_dt, dx2_dt, dx3_dt]
+            return [dx1_dt, dx2_dt, dx3_dt, dx4_dt]
 
         tt = np.linspace(0, self.tau, 2)
         xx0 = np.array(self.state).flatten()
         s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
 
-        phi, phi_dot, theta_dot = s.y[:, -1].flatten()
+        phi, phi_dot, theta, theta_dot = s.y[:, -1].flatten()
 
-        state = (phi, phi_dot, theta_dot)
+        #! Beschränkung für q1dot
+        if abs(theta_dot) > 500:
+            theta_dot = np.sign(theta_dot) * 500
+
+        state = (phi, phi_dot, theta, theta_dot)
         return state
 
     def step(self, action):
@@ -207,7 +220,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         # Debug reproducibility
         # with open("test.txt", "a") as f:
         #     f.write(f"\nStep. {self.total_step_count}, old State: {old_state}, Action: {action}, new State: {self.state}")
-
+        self.action = action
         self.reward, terminated, truncated, info = self.get_reward()
 
         if self.render_mode == "human":
@@ -236,7 +249,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.history["info"].append(info)
 
     def get_reward(self):
-        phi, phi_dot, theta_dot = self.state
+        phi, phi_dot, theta, theta_dot = self.state
 
         truncated = False
         info = {}
@@ -332,7 +345,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         polewidth = 10.0
         # polelen = scale * (2 * self.dist_pole_com)
         polelen = 200
-        wheeldiameter = 50.0
+        wheeldiameter = 50.0 * 2
         # cartheight = 30.0
 
         if self.state is None:
@@ -343,7 +356,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         self.surf = pygame.Surface((self.screen_width, self.screen_height))
         self.surf.fill((255, 255, 255))
 
-        table_hight = 10 # carty
+        table_hight = 410 # carty
         # l, r, t, b = -cartwidth / 2, cartwidth / 2, cartheight / 2, -cartheight / 2
         # axleoffset = cartheight / 4.0
         # cartx = x[0] * scale + self.screen_width / 2.0  # MIDDLE OF CART
@@ -372,27 +385,40 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         # Wheel
         # Wheel center
-        center = tuple((np.array(pole_coords[1]) + np.array(pole_coords[2])) / 2)
-
+        center = tuple((np.array(pole_coords[1]) + np.array(pole_coords[2])) // 2)     
+        
+        fname = os.path.join(os.path.dirname(__file__), "assets/wheel2.png")
+        img = pygame.image.load(fname)
+        scale_img = pygame.transform.smoothscale(
+                img,
+                (wheeldiameter, wheeldiameter),
+            )
+        rot_image = pygame.transform.rotate(scale_img, x[2]/np.pi*180)
+        # rot_image = u.blit_rotate(self.surf, scale_img, center, x[2]/np.pi*180)
+        self.surf.blit(rot_image, tuple(center - np.array(rot_image.get_rect().center)))
+        
+        # wheel joint 
         gfxdraw.aacircle(
             self.surf,
             int(center[0]),
             int(center[1]),
-            int(wheeldiameter),
+            int(polewidth / 2),
             (129, 132, 203),
         )
         gfxdraw.filled_circle(
             self.surf,
             int(center[0]),
             int(center[1]),
-            int(wheeldiameter),
+            int(polewidth / 2),
             (129, 132, 203),
         )
         
+        # arrow
         fname = os.path.join(os.path.dirname(__file__), "assets/clockwise.png")
         img = pygame.image.load(fname)
-        if x[2] is not None:
-            theta_dot = np.sign(x[2]) * np.min((np.abs(x[2]), 100)) / 10
+        if x[-1] is not None:
+            # theta_dot = np.sign(x[-1]) * np.min((np.abs(x[-1]), 100)) / 10
+            theta_dot = np.sign(x[-1]) * np.log(np.abs(x[-1]) + 1)
             scale_img = pygame.transform.smoothscale(
                 img,
                 (scale * np.abs(theta_dot) / 2, scale * np.abs(theta_dot) / 2),
@@ -403,7 +429,7 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 scale_img,
                 (
                     self.screen_width // 2 - scale_img.get_rect().centerx,
-                    self.screen_width // 2 - scale_img.get_rect().centery,
+                    self.screen_width // 2 - scale_img.get_rect().centery + table_hight,
                 ),
             )
         
@@ -425,20 +451,16 @@ class ReactionWheelEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         gfxdraw.hline(self.surf, 0, self.screen_width, table_hight, (0, 0, 0))
 
-        # show action
-        # if self.action == 0:
-        #     gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 - 10), 10, 10, (0, 0, 255))
-        # elif self.action == 1:
-        #     gfxdraw.filled_circle(self.surf, int(self.screen_width / 2 + 10), 10, 10, (255, 0, 0))
 
         # flip coordinates
         self.surf = pygame.transform.flip(self.surf, False, True)
 
         # show state on screen
-        p = precision = 3
+        p = precision = 4
         u.text_to_screen(self.surf, f"phi      {np.round(x[0], p)}", (int(self.screen_width / 2), 10))
         u.text_to_screen(self.surf, f"phidot   {np.round(x[1], p)}", (int(self.screen_width / 2), 30))
-        u.text_to_screen(self.surf, f"thetadot {np.round(x[2], p)}", (int(self.screen_width / 2), 50))
+        u.text_to_screen(self.surf, f"theta    {np.round(x[2], p)}", (int(self.screen_width / 2), 50))
+        u.text_to_screen(self.surf, f"thetadot {np.round(x[3], p)}", (int(self.screen_width / 2), 70))
         if self.reward is not None:
             u.text_to_screen(self.surf, f"Rew {np.round(self.reward, p)}", (int(self.screen_width *4/5), 100))
         if self.action is not None:
@@ -537,178 +559,3 @@ class DefaultReactionWheelEnv(ReactionWheelEnv):
 
     def get_reward(self):
         return self.c.get_reward(self)
-
-
-# class CartPoleContinous5StateEnv(CartPoleEnv):
-#     """same as Continuous Env 2 but with cos(phi), sin(phi) instead of phi in state representation
-#     only change output of step, which is what the agent sees, internal state as before S\in\R^4"""
-
-#     def __init__(self, render_mode: Optional[str] = None):
-#         super().__init__(render_mode)
-#         self.action_space = spaces.Box(-10, 10, (1,), float)
-#         high = np.array(
-#             [
-#                 self.x_threshold * 2,  # x
-#                 np.finfo(np.float32).max,  # xdot
-#                 1,  # cos phi
-#                 1,  # sin phi
-#                 np.finfo(np.float32).max,  # phidot
-#             ],
-#             dtype=np.float32,
-#         )
-#         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
-
-#         import envs.parameter.CartPoleContinous5StateEnv as c
-
-#         self.c = c
-#         self.seed = c.START_SEED
-
-#     def get_force(self, action):
-#         return action
-
-#     def calc_new_state(self, action):
-#         x, x_dot, theta, theta_dot = self.state
-#         force = self.get_force(action)
-
-#         # based on mathematical pendulum
-
-#         def rhs(t, state):
-#             x, x_dot, theta, theta_dot = state
-#             x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
-#             g = self.gravity
-#             l = self.length
-#             m1 = self.masscart
-#             m2 = self.masspole
-#             try:
-#                 u1 = force[0]
-#             except IndexError:
-#                 u1 = force
-#             dx1_dt = x3
-#             dx2_dt = x4
-#             dx3_dt = (-g * m2 * np.sin(x2) * np.cos(x2) + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
-#                 m1 + m2 * np.sin(x2) ** 2
-#             )
-#             dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
-#                 l * (m1 + m2 * np.sin(x2) ** 2)
-#             )
-
-#             return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
-
-#         tt = np.linspace(0, self.tau, 2)
-#         xx0 = np.array(self.state).flatten()
-#         s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
-
-#         x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
-
-#         state = (x, x_dot, theta, theta_dot)
-#         return state
-
-#     def post_processing_state(self, state):
-#         state = np.array([state[0], state[1], np.cos(state[2]), np.sin(state[2]), state[3]], dtype=np.float32)
-#         return state
-
-#     def get_reward(self):
-#         return self.c.get_reward(self)
-
-
-# class CartPoleContinousSwingupEnv(CartPoleEnv):
-#     def __init__(self, render_mode: Optional[str] = None):
-#         super().__init__(render_mode)
-#         self.action_space = spaces.Box(-10, 10, (1,), float)
-#         import envs.parameter.CartPoleContinousSwingupEnv as c
-
-#         self.c = c
-#         self.seed = c.START_SEED
-
-#     def get_force(self, action):
-#         return action
-
-#     def calc_new_state(self, action):
-#         x, x_dot, theta, theta_dot = self.state
-#         force = self.get_force(action)
-
-#         # based on mathematical pendulum
-
-#         def rhs(t, state):
-#             x, x_dot, theta, theta_dot = state
-#             x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
-#             g = self.gravity
-#             l = self.length
-#             m1 = self.masscart
-#             m2 = self.masspole
-#             try:
-#                 u1 = force[0]
-#             except IndexError:
-#                 u1 = force
-#             dx1_dt = x3
-#             dx2_dt = x4
-#             dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
-#                 m1 + m2 * np.sin(x2) ** 2
-#             )
-#             dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
-#                 l * (m1 + m2 * np.sin(x2) ** 2)
-#             )
-
-#             return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
-
-#         tt = np.linspace(0, self.tau, 2)
-#         xx0 = np.array(self.state).flatten()
-#         s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
-
-#         x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
-
-#         state = (x, x_dot, theta, theta_dot)
-#         return state
-
-#     def get_reward(self):
-#         return self.c.get_reward(self)
-
-
-# class CartPoleContinousAttractionEnv(CartPoleContinousSwingupEnv):
-#     def __init__(self, render_mode: Optional[str] = None):
-#         super().__init__(render_mode)
-#         self.attraction_zone = 10 * np.pi / 180
-
-#     def calc_new_state(self, action):
-#         x, x_dot, theta, theta_dot = self.state
-#         force = self.get_force(action)
-
-#         # based on mathematical pendulum
-
-#         def rhs(t, state):
-#             x, x_dot, theta, theta_dot = state
-#             x1, x2, x3, x4 = x, theta, x_dot, theta_dot  # change order
-#             g = self.gravity
-#             l = self.length
-#             m1 = self.masscart
-#             m2 = self.masspole
-
-#             # Attraction Force
-#             if np.abs(theta) < self.attraction_zone:
-#                 F_att = 10
-#             else:
-#                 F_att = 0
-
-#             try:
-#                 u1 = force[0]
-#             except IndexError:
-#                 u1 = force
-#             dx1_dt = x3
-#             dx2_dt = x4
-#             dx3_dt = (-g * m2 * np.sin(2 * x2) / 2 + l * m2 * theta_dot**2 * np.sin(x2) + u1) / (
-#                 m1 + m2 * np.sin(x2) ** 2
-#             )
-#             dx4_dt = (g * (m1 + m2) * np.sin(x2) - (l * m2 * theta_dot**2 * np.sin(x2) + u1) * np.cos(x2)) / (
-#                 l * (m1 + m2 * np.sin(x2) ** 2)
-#             )
-
-#             return [dx1_dt, dx3_dt, dx2_dt, dx4_dt]  # change order back
-
-#         tt = np.linspace(0, self.tau, 2)
-#         xx0 = np.array(self.state).flatten()
-#         s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
-
-#         x, x_dot, theta, theta_dot = s.y[:, -1].flatten()
-
-#         state = (x, x_dot, theta, theta_dot)
-#         return state

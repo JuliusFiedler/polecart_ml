@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="15.000003mm"
+   height="15.000006mm"
+   viewBox="0 0 15.000003 15.000006"
+   version="1.1"
+   id="svg5"
+   inkscape:export-filename="wheel2.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   inkscape:version="1.2 (dc2aedaf03, 2022-05-15)"
+   sodipodi:docname="wheel.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="4.7572176"
+     inkscape:cx="-3.468414"
+     inkscape:cy="32.371864"
+     inkscape:window-width="1920"
+     inkscape:window-height="1137"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs2" />
+  <g
+     inkscape:label="Ebene 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-75.588202,-169.66479)">
+    <ellipse
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2.25925"
+       id="path484"
+       cx="61.222301"
+       cy="177.43456"
+       rx="6.3703766"
+       ry="6.370378" />
+    <ellipse
+       style="fill:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:3.47336"
+       id="path184"
+       ry="8.2633209"
+       rx="8.2633228"
+       cy="178.16481"
+       cx="104.07214" />
+    <rect
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:1.9533"
+       id="rect1099"
+       width="1.1365824"
+       height="5.363493"
+       x="60.773571"
+       y="178.09818" />
+    <ellipse
+       style="fill:none;fill-rule:evenodd;stroke:#000000;stroke-width:2.25925"
+       id="path484-4"
+       cx="83.088203"
+       cy="177.16479"
+       rx="6.3703766"
+       ry="6.370378" />
+    <rect
+       style="fill:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:0;stroke-dasharray:none"
+       id="rect1099-0"
+       width="0.29266426"
+       height="10.804323"
+       x="82.941872"
+       y="171.93782" />
+    <rect
+       style="fill:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:0;stroke-dasharray:none"
+       id="rect1099-0-5"
+       width="0.29906636"
+       height="10.477022"
+       x="-177.31433"
+       y="77.849693"
+       transform="rotate(-90)" />
+    <path
+       style="fill:#008000;fill-rule:evenodd;stroke:#ffffff;stroke-width:0;stroke-dasharray:none"
+       d="M 108.56599,46.867334 C 103.50801,46.205899 98.776543,43.534884 95.600241,39.547899 93.379357,36.760181 91.748538,32.72198 91.365173,29.061105 l -0.115567,-1.103586 h 9.554514 9.55451 v 9.564414 c 0,7.52561 -0.056,9.558732 -0.26276,9.537759 -0.14452,-0.01466 -0.83296,-0.101221 -1.52988,-0.192358 z"
+       id="path1045"
+       transform="matrix(0.26458333,0,0,0.26458333,53.7223,169.93455)" />
+    <path
+       style="fill:#ff0000;fill-rule:evenodd;stroke:#ffffff;stroke-width:0;stroke-dasharray:none"
+       d="m 111.61987,37.512029 v -9.55451 h 9.55451 9.55451 l -0.11557,1.103586 c -0.56399,5.385707 -3.26254,10.367569 -7.39441,13.651016 -2.80264,2.227156 -6.83435,3.855461 -10.49546,4.238851 l -1.10358,0.115567 z"
+       id="path1116"
+       transform="matrix(0.26458333,0,0,0.26458333,53.7223,169.93455)" />
+    <path
+       style="fill:#00ffff;fill-rule:evenodd;stroke:#ffffff;stroke-width:0;stroke-dasharray:none"
+       d="M 111.61987,17.141767 V 7.5872564 l 1.10358,0.1155672 c 5.144,0.5386779 10.17409,3.1900354 13.3943,7.0601364 2.33669,2.808261 4.10052,7.057308 4.49557,10.829731 l 0.11557,1.103586 h -9.55451 -9.55451 z"
+       id="path1118"
+       transform="matrix(0.26458333,0,0,0.26458333,53.7223,169.93455)" />
+    <path
+       style="fill:#ffff00;fill-rule:evenodd;stroke:#ffffff;stroke-width:0;stroke-dasharray:none"
+       d="m 91.365173,25.592691 c 0.38339,-3.661109 2.011695,-7.692817 4.238851,-10.495457 3.283448,-4.131872 8.265306,-6.8304211 13.651016,-7.3944104 l 1.10359,-0.1155672 v 9.5545106 9.55451 h -9.55451 -9.554514 z"
+       id="path1189"
+       transform="matrix(0.26458333,0,0,0.26458333,53.7223,169.93455)" />
+  </g>
+</svg>

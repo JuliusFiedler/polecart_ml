@@ -53,6 +53,24 @@ def text_objects(msg, font, text_color=black):
     text_surface = font.render(msg, True, text_color)
     return text_surface, text_surface.get_rect()
 
+def blit_rotate(surf, image, pos, angle):
+    originPos = image.get_size()
+    # offset from pivot to center
+    image_rect = image.get_rect(topleft = (pos[0] - originPos[0], pos[1]-originPos[1]))
+    offset_center_to_pivot = pg.math.Vector2(pos) - image_rect.center
+    
+    # roatated offset from pivot to center
+    rotated_offset = offset_center_to_pivot.rotate(-angle)
+
+    # roatetd image center
+    rotated_image_center = (pos[0] - rotated_offset.x, pos[1] - rotated_offset.y)
+
+    # get a rotated image
+    rotated_image = pg.transform.rotate(image, angle)
+    rotated_image_rect = rotated_image.get_rect(center = rotated_image_center)
+
+    # rotate and blit the image
+    surf.blit(rotated_image, rotated_image_rect)
 
 class Button:
     def __init__(
@@ -247,3 +265,35 @@ def smooth_timedelta(start_datetime, end_datetime=None):
     if secs > 0:
         timetot += " {}s".format(int(secs))
     return timetot
+
+# von Daniel Gerbet für beamball
+def binom(n, k):
+    """
+    compute the binomial coefficient 'n' choose 'k'
+    """
+    assert n > 0
+    assert 0 <= k and k <= n
+    if 2*k > n:
+        k = n - k
+    ans = 1
+    for i in range(1, k+1):
+        ans *= n
+        assert ans % i == 0
+        ans //= i
+        n -= 1
+    return ans
+
+def dsin(k, f, x):
+    """
+    return the 'k'th derivative of the sine wrt. 'x', evaluated at 'f'*'x'
+    """
+    pf = f**k
+    if k%4 == 0:
+        return pf * np.sin(f*x)
+    if k%4 == 1:
+        return pf * np.cos(f*x)
+    if k%4 == 2:
+        return - pf * np.sin(f*x)
+    if k%4 == 3:
+        return - pf * np.cos(f*x)
+    assert False

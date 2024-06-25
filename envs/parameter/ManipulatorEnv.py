@@ -28,7 +28,7 @@ def get_reset_bounds(env):
 
 # Rewards
 def get_reward(env: ManipulatorEnv):
-    phi1, phi2, omega1, omega2 = env.state
+    phi1, phi2, omega1, omega2, targetx, targety = env.state
 
     truncated = False
     terminated = False
@@ -38,11 +38,13 @@ def get_reward(env: ManipulatorEnv):
         print("reset after 1000 steps")
 
     polelength = 1
-    center_coord = (0, 0)
-    join_coord = np.array((np.cos(phi1)*polelength, -np.sin(phi1)*polelength)) + np.array(center_coord)
+    join_coord = np.array((np.cos(phi1)*polelength, -np.sin(phi1)*polelength))
     end_coord =  np.array((np.cos(phi1+phi2)*polelength, -np.sin(phi1+phi2)*polelength)) + np.array(join_coord)
 
-    reward = -np.sum((env.target - end_coord)**2) - 0.1*np.abs(omega1) - 0.1*np.abs(omega2)
+    dist = np.sum((np.array([targetx, targety]) - end_coord)**2)
+    reward = - dist - 0.01*np.abs(omega1) - 0.01*np.abs(omega2)
+    if dist < 0.1 and np.abs(omega1)<0.1 and np.abs(omega2) < 0.1:
+        terminated = True
     return reward, terminated, truncated, info
 
 

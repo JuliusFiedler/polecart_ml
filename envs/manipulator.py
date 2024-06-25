@@ -82,15 +82,10 @@ class ManipulatorEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             return np.array([dxdt1, dxdt2, dxdt3, dxdt4])
 
         tt = np.linspace(0, self.tau, 2)
-        xx0 = np.array(self.state).flatten()
+        xx0 = np.array(self.state[:4]).flatten()
         s = solve_ivp(rhs, (0, self.tau), xx0, t_eval=tt)
 
-        # for i in range(4):
-        #     plt.plot(s.t, s.y[i], label=f"$x_{i}$")
-        # plt.legend()
-        # plt.show()
-        # q1, q2, q1dot, q2dot
-        self.state = (s.y[:, -1].flatten())
+        self.state[:4] = s.y[:, -1].flatten()
         return self.state
 
     def step(self, action):
@@ -120,9 +115,7 @@ class ManipulatorEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             truncated = True
         # self.save_step_data(state, action, self.reward, terminated, truncated, info)
 
-        state = self.state
-
-        return state, self.reward, terminated, truncated, info
+        return self.state, self.reward, terminated, truncated, info
 
     def get_reward(self):
         return self.c.get_reward(self)
@@ -241,14 +234,15 @@ class ManipulatorEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         p = precision = 3
         pos_left = 50
-        u.text_to_screen(self.surf, f"phi1 {np.round(x[0], p)}", (pos_left, 50))
-        u.text_to_screen(self.surf, f"phi2 {np.round(x[1], p)}", (pos_left, 70))
-        u.text_to_screen(self.surf, f"ome1 {np.round(x[2], p)}", (pos_left, 90))
-        u.text_to_screen(self.surf, f"ome2 {np.round(x[3], p)}", (pos_left, 110))
+        u.text_to_screen(self.surf, f"phi1 {np.round(x[0], p)}", (pos_left, 60))
+        u.text_to_screen(self.surf, f"phi2 {np.round(x[1], p)}", (pos_left, 80))
+        u.text_to_screen(self.surf, f"ome1 {np.round(x[2], p)}", (pos_left, 100))
+        u.text_to_screen(self.surf, f"ome2 {np.round(x[3], p)}", (pos_left, 120))
+
         if self.reward is not None:
-            u.text_to_screen(self.surf, f"Rew {np.round(self.reward, p)}", (pos_left, 140))
+            u.text_to_screen(self.surf, f"Rew {np.round(self.reward, p)}", (pos_left, 150))
         if self.action is not None:
-            u.text_to_screen(self.surf, f"Act {np.round(self.action, p)}", (pos_left, 160))
+            u.text_to_screen(self.surf, f"Act {np.round(self.action, p)}", (pos_left, 170))
 
         u.text_to_screen(self.surf, f"Episode {self.episode_count}", (43, 10))
         u.text_to_screen(self.surf, f"Step {self.ep_step_count}", (40, 30))
@@ -303,14 +297,21 @@ class ManipulatorEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
 
         self.ep_step_count = 0
         self.episode_count += 1
-        if state is None:
-            self.state = np.zeros(self.observation_space.shape)
-        else:
-            self.state = state
 
-        r = np.random.rand()*1.8
+        if state is None:
+            self.state = np.zeros(self.observation_space.shape, dtype=float)
+            # random state
+            low, high = self.c.get_reset_bounds(self)
+            # self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
+            self.state[:4] = self.np_random.uniform(low=low, high=high, size=np.array(low).shape)
+        else:
+            # fixed state
+            self.state = np.array(state, dtype=float)
+
+        r = np.random.rand()+0.5
         phi = np.random.rand()*np.pi*2
         self.target = np.array([r*np.cos(phi), r*np.sin(phi)])
+        self.state[4:] = self.target
 
         if self.render_mode == "human":
             self.render()

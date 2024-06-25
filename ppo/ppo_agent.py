@@ -5,17 +5,18 @@ import matplotlib.pyplot as plt
 import pickle
 import copy
 import torch as th
+from ipydex import IPS
 
 sys.modules["gym"] = gymnasium
 import datetime as dt
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.monitor import Monitor
+
 from classical.classical_control import F_LQR_2 as LQR_IDEAL
 from agents.agent import BaseAgent
-from ipydex import IPS
-
 from util import *
+
 
 
 class PPOAgent(BaseAgent):
@@ -36,7 +37,7 @@ class PPOAgent(BaseAgent):
                 self.model.policy.action_net.bias = self.action_net_kwargs["bias"]
                 self.model.policy.action_net.weight.data = self.action_net_kwargs["weight"]
 
-    def train(self, total_timesteps=300000, callback=None, save_model=True):
+    def train(self, total_timesteps=300000, callback=None, save_model=True, eval=True):
         self.env.training = True
         # Create Folders and setup logs
         if save_model:
@@ -76,7 +77,8 @@ class PPOAgent(BaseAgent):
         # Save Model data
         if save_model:
             self.save_model()
-            self.eval()
+            if eval:
+                self.eval()
         self.env.training = False
 
     def save_model(self):
@@ -124,7 +126,7 @@ class PPOAgent(BaseAgent):
         self.model.set_parameters(path)
         self.model_name = name
 
-    def get_action(self, obs):
+    def get_action(self, obs, *args):
         return self.model.predict(obs, deterministic=True)[0]
 
     def get_value(self, state):
@@ -149,7 +151,7 @@ class PPOAgent(BaseAgent):
             V += gamma**i * rew
             if term or trunc:
                 done = True
-            if abs(gamma**i * rew) < 1e-3:
+            if abs(gamma**i * rew) < 1e-7:
                 done = True
             i += 1
         return V
@@ -164,12 +166,12 @@ class PPOAgent(BaseAgent):
             while not done and not trunc:
                 action, _ = self.model.predict(obs, deterministic=True)
                 obs, reward, done, trunc, info = self.env.step(action)
-                if k % 20 == 0:
-                    print(
-                        "real - est",
-                        self.get_real_state_value(obs)
-                        - self.model.policy.predict_values(th.tensor(np.array([obs]))).detach().numpy(),
-                    )
+                # if k % 20 == 0:
+                #     print(
+                #         "real - est",
+                #         self.get_real_state_value(obs)
+                #         - self.model.policy.predict_values(th.tensor(np.array([obs]))).detach().numpy(),
+                #     )
                 r_sum += reward
                 k += 1
             # print("Reward Ep ", i, r_sum)
@@ -177,6 +179,10 @@ class PPOAgent(BaseAgent):
     def eval(self):
         plots = []
         self.run_eval_episodes()
+        from visualize_nets import visualize_actions_values
+        self.folder_path = os.path.join(ROOT_PATH, "models", self.model_name)
+        if self.env.observation_space.shape == (4,):
+            visualize_actions_values(self.env, self, self.folder_path, self.model_name)
 
         # visualize training
         path = os.path.join("models", self.model_name, "training_logs.p")
@@ -314,12 +320,12 @@ class PPOAgent(BaseAgent):
             plt.clf()
 
             # add all plots to one big plot
-            fig, ax = plt.subplots(2, 2)
-            for i in range(ax.shape[0]):
-                for k in range(ax.shape[1]):
-                    try:
-                        ax[i, k] = plots[2 * i + k]
-                    except IndexError:
-                        pass
-            fig.suptitle(self.model_name)
-            plt.savefig(os.path.join("models", self.model_name, "Info.pdf"), format="pdf")
+            # fig, ax = plt.subplots(2, 2)
+            # for i in range(ax.shape[0]):
+            #     for k in range(ax.shape[1]):
+            #         try:
+            #             ax[i, k] = plots[2 * i + k]
+            #         except IndexError:
+            #             pass
+            # fig.suptitle(self.model_name)
+            # plt.savefig(os.path.join("models", self.model_name, "Info.pdf"), format="pdf")

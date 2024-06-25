@@ -17,6 +17,9 @@ def linearize_NN(env, model):
     action_net_weights = []
     action_net_biases = []
     action_net_activation_fns = []
+    
+    if model.policy.action_net.bias is None:
+        action_net_biases = np.zeros((model.policy.action_net.in_features, model.policy.action_net.out_features))
 
     # extract policy net information
     if isinstance(model.policy.mlp_extractor.policy_net, th.nn.modules.container.Sequential):
@@ -43,7 +46,8 @@ def linearize_NN(env, model):
                 raise NotImplementedError
     elif isinstance(model.policy.action_net, th.nn.modules.linear.Linear):
         action_net_weights.append(model.policy.action_net.weight.detach().numpy())
-        action_net_biases.append(model.policy.action_net.bias.detach().numpy())
+        if model.policy.action_net.bias is not None:
+            action_net_biases.append(model.policy.action_net.bias.detach().numpy())
     else:
         raise NotImplementedError
 

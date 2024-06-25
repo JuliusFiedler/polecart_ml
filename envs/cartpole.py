@@ -493,10 +493,17 @@ class CartPoleDiscreteEnv(CartPoleEnv):
     def __init__(self, render_mode: Optional[str] = None):
         super().__init__(render_mode)
         self.action_space = spaces.Discrete(2)
+        import envs.parameter.CartPoleDiscreteEnv as c
+        
+        self.c = c
 
     def get_force(self, action):
         force = self.force_mag if action == 1 else -self.force_mag
         return force
+    
+    def get_reward(self):
+        return self.c.get_reward(self)
+
 
 
 class CartPoleContinousEnv(CartPoleEnv):
