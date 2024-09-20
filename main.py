@@ -41,12 +41,12 @@ folder_path = os.path.abspath(os.path.dirname(__file__))
 # mode = "manual"
 # mode = "rwp_up_hold"
 # mode = "pid"
-mode = "state_feedback"
+# mode = "state_feedback"
 # mode = "generate swingup trajectory"
 # mode = "input from file"
 # mode = "rp"
 # mode = "compare"
-# mode = "test"
+mode = "test"
 
 
 ### --- Environment --- ###
@@ -60,8 +60,8 @@ env2 = CartPoleContinous2Env()
 
 # env = StdPendulumEnv()
 # env = DefaultReactionWheelEnv()
-env = DefaultBallBeamEnv()
-# env = ManipulatorEnv()
+# env = DefaultBallBeamEnv()
+env = ManipulatorEnv()
 
 ### --- Agent --- ###
 # agent = PPOAgent(env, policy_kwargs={"net_arch": {'pi': [2000], 'vf': [100, 100]}})
@@ -72,7 +72,7 @@ env = DefaultBallBeamEnv()
 # agent = PPOAgent(env)
 # agent = JacobianApproximationControl(env)
 # agent = ExactLinearizationAgent(env)
-agent = FeedbackAgent(env, F_LQR_BB_1)
+# agent = FeedbackAgent(env, F_LQR_BB_1)
 # agent = ManualAgent(env)
 
 ### --- Callback --- ###
