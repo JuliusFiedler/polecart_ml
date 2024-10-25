@@ -68,7 +68,10 @@ class PPOAgent(BaseAgent):
         # Training
         t1 = datetime.datetime.now()
         try:
-            self.model.learn(total_timesteps=total_timesteps, callback=callback)
+            if save_model:
+                self.model.learn(total_timesteps=total_timesteps, callback=callback)
+            else:
+                self.model.learn(total_timesteps=total_timesteps)
         except KeyboardInterrupt:
             pass
         t2 = datetime.datetime.now()
@@ -121,7 +124,7 @@ class PPOAgent(BaseAgent):
     def load_model(self, name):
         if self.model is None:
             self.create_model()
-        path = os.path.join("models", name, "model.h5")
+        path = os.path.join(ROOT_PATH, "models", name, "model.h5")
         # self.model = PPO.load(path)
         self.model.set_parameters(path)
         self.model_name = name

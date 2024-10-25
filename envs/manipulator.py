@@ -46,8 +46,8 @@ class ManipulatorEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
                 np.finfo(np.float32).max,  # xdot
                 np.finfo(np.float32).max,  # phi
                 np.finfo(np.float32).max,  # phidot
-                2,                         # target x
-                2,                         # target y
+                2,                         # target phi1
+                2,                         # target phi2
             ],
             dtype=np.float32,
         )
@@ -219,14 +219,23 @@ class ManipulatorEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
         )
 
         # target
-        if self.target is not None:
-            gfxdraw.filled_circle(
-                self.surf,
-                int(self.target[0]*polelength*2+center_coord[0]),
-                int(self.target[1]*polelength*2+center_coord[1]),
-                int(polewidth / 2),
-                (255, 132, 100),
-            )
+        joint_target = np.array((np.cos(x[4])*polelength, -np.sin(x[4])*polelength)) + np.array(center_coord)
+        end_target =  np.array((np.cos(x[4]+x[5])*polelength, -np.sin(x[4]+x[5])*polelength)) + np.array(joint_target)
+
+        gfxdraw.filled_circle(
+            self.surf,
+            int(joint_target[0]),
+            int(joint_target[1]),
+            int(polewidth / 2),
+            (255, 132, 100),
+        )
+        gfxdraw.filled_circle(
+            self.surf,
+            int(end_target[0]),
+            int(end_target[1]),
+            int(polewidth / 2),
+            (255, 132, 100),
+        )
 
 
         # flip coordinates
@@ -303,15 +312,15 @@ class ManipulatorEnv(gym.Env[np.ndarray, Union[int, np.ndarray]]):
             # random state
             low, high = self.c.get_reset_bounds(self)
             # self.state = self.np_random.uniform(low=low, high=high, size=self.observation_space.shape)
-            self.state[:4] = self.np_random.uniform(low=low, high=high, size=np.array(low).shape)
+            self.state = self.np_random.uniform(low=low, high=high, size=np.array(low).shape)
         else:
             # fixed state
             self.state = np.array(state, dtype=float)
 
-        r = np.random.rand()+0.5
-        phi = np.random.rand()*np.pi*2
-        self.target = np.array([r*np.cos(phi), r*np.sin(phi)])
-        self.state[4:] = self.target
+        # r = np.random.rand()+0.5
+        # phi = np.random.rand()*np.pi*2
+        # self.target = np.array([r*np.cos(phi), r*np.sin(phi)])
+        # self.state[4:] = self.target
 
         if self.render_mode == "human":
             self.render()
